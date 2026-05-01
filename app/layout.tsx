@@ -23,14 +23,14 @@ const jetbrains = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Lattice Explorer",
+  title: "Avalanche Explorer",
   description: "Block explorer for Avalanche L1s",
 };
 
 const themeBootstrap = `
 (function(){
   try {
-    var t = localStorage.getItem('lattice:theme');
+    var t = localStorage.getItem('explorer:theme');
     if (!t) {
       t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     }

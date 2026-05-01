@@ -18,7 +18,7 @@ export function ThemeToggle() {
     const next: Theme = theme === "dark" ? "light" : "dark";
     document.documentElement.setAttribute("data-theme", next);
     try {
-      localStorage.setItem("lattice:theme", next);
+      localStorage.setItem("explorer:theme", next);
     } catch {
       /* ignore */
     }

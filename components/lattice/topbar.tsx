@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { TriangleMark } from "./triangle-mark";
+import { AvalancheLogo } from "./avalanche-logo";
 import { ThemeToggle } from "./theme-toggle";
 
 const NAV: ReadonlyArray<{ slug: string; label: string; href: string }> = [
@@ -28,7 +28,7 @@ export function Topbar() {
       style={{ paddingTop: 14, paddingBottom: 14, paddingLeft: 28, paddingRight: 28 }}
     >
       <Link href="/" className="flex items-center gap-2.5">
-        <TriangleMark size={22} color="var(--ink)" />
+        <AvalancheLogo size={22} color="var(--accent)" />
         <span
           className="font-display"
           style={{
@@ -37,11 +37,6 @@ export function Topbar() {
             letterSpacing: "-0.01em",
             color: "var(--ink)",
           }}
-        >
-          Lattice
-        </span>
-        <span
-          style={{ color: "var(--ink-4)", fontWeight: 400, marginLeft: 4, fontSize: 16 }}
         >
           Explorer
         </span>
