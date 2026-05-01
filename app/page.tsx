@@ -5,16 +5,19 @@ import { useStats, useBlocks, useTransactions } from "@/lib/api/queries";
 import { Hash } from "@/components/lattice/hash";
 import { Chip } from "@/components/lattice/chip";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useFreshHashes } from "@/lib/use-fresh";
 import {
   formatNativeAmount,
   formatNumber,
   formatRelativeTime,
+  truncateHash,
 } from "@/lib/format";
 
 export default function Home() {
   const { data: stats } = useStats();
   const { data: blocks } = useBlocks();
   const { data: txs } = useTransactions();
+  const freshBlocks = useFreshHashes(blocks?.items);
 
   const blockTimeMs =
     typeof stats?.average_block_time === "number" && stats.average_block_time > 0
@@ -121,11 +124,11 @@ export default function Home() {
               blocks.items.slice(0, 6).map((b, i, arr) => (
                 <div
                   key={b.hash}
-                  className="grid items-center gap-3.5"
+                  className={`grid items-center gap-3.5 ${freshBlocks.has(b.hash) ? "fresh-row" : ""}`}
                   style={{
                     gridTemplateColumns: "100px 1fr auto",
                     padding: "14px 18px",
-                    borderBottom: i < arr.length - 1 ? "1px solid var(--line-2)" : 0,
+                    borderBottom: i < arr.length - 1 ? "1px solid var(--line-soft)" : 0,
                   }}
                 >
                   <div>
@@ -147,7 +150,7 @@ export default function Home() {
                       className="mono"
                       style={{ fontSize: 10.5, color: "var(--ink-4)" }}
                     >
-                      by {b.miner?.hash ? `${b.miner.hash.slice(0, 8)}…${b.miner.hash.slice(-4)}` : "—"}
+                      by {b.miner?.hash ? truncateHash(b.miner.hash, 6, 4) : "—"}
                     </div>
                   </div>
                   <div className="text-right">
@@ -192,19 +195,20 @@ export default function Home() {
           <table className="lat-tbl">
             <thead>
               <tr>
-                <th style={{ width: 80 }}>Status</th>
+                <th style={{ width: 72 }}>Status</th>
                 <th>Hash</th>
+                <th style={{ width: 110 }}>Method</th>
                 <th>From</th>
                 <th>To</th>
                 <th style={{ textAlign: "right" }}>Value</th>
-                <th style={{ textAlign: "right", width: 80 }}>Age</th>
+                <th style={{ textAlign: "right", width: 70 }}>Age</th>
               </tr>
             </thead>
             <tbody>
               {!txs ? (
                 Array.from({ length: 6 }).map((_, i) => (
                   <tr key={i}>
-                    <td colSpan={6}>
+                    <td colSpan={7}>
                       <Skeleton className="h-4 w-full" />
                     </td>
                   </tr>
@@ -217,22 +221,28 @@ export default function Home() {
                         {t.status === "ok" ? "✓ ok" : t.status ?? "—"}
                       </Chip>
                     </td>
-                    <td className="mono">
-                      <Hash value={t.hash} link length={12} />
+                    <td>
+                      <Hash value={t.hash} tone="link" length={10} />
                     </td>
-                    <td className="mono">
-                      <Hash
-                        value={t.from?.hash ?? ""}
-                        link
-                        length={6}
-                        showCopy={false}
-                      />
-                    </td>
-                    <td className="mono">
-                      {t.to?.hash ? (
-                        <Hash value={t.to.hash} link length={6} showCopy={false} />
+                    <td>
+                      {t.method ? (
+                        <Chip tone="steel">{t.method}</Chip>
                       ) : (
-                        <span style={{ color: "var(--ink-4)" }}>contract creation</span>
+                        <span className="mono" style={{ fontSize: 11.5, color: "var(--ink-4)" }}>
+                          transfer
+                        </span>
+                      )}
+                    </td>
+                    <td>
+                      <Hash value={t.from?.hash ?? ""} tone="dim" length={6} />
+                    </td>
+                    <td>
+                      {t.to?.hash ? (
+                        <Hash value={t.to.hash} tone="dim" length={6} />
+                      ) : (
+                        <span className="mono" style={{ fontSize: 11.5, color: "var(--ink-4)" }}>
+                          contract creation
+                        </span>
                       )}
                     </td>
                     <td

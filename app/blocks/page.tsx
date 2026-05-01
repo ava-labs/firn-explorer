@@ -68,8 +68,8 @@ export default function BlocksPage() {
                   <td className="mono" style={{ color: "var(--ink)" }}>
                     #{formatNumber(block.height)}
                   </td>
-                  <td className="mono">
-                    <Hash value={block.hash} link length={14} />
+                  <td>
+                    <Hash value={block.hash} tone="link" length={14} />
                   </td>
                   <td
                     className="mono"
@@ -83,14 +83,9 @@ export default function BlocksPage() {
                   >
                     {formatNumber(block.gas_used)}
                   </td>
-                  <td className="mono">
+                  <td>
                     {block.miner?.hash ? (
-                      <Hash
-                        value={block.miner.hash}
-                        link
-                        length={8}
-                        showCopy={false}
-                      />
+                      <Hash value={block.miner.hash} tone="dim" length={8} />
                     ) : (
                       <span style={{ color: "var(--ink-4)" }}>—</span>
                     )}

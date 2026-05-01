@@ -50,21 +50,20 @@ export default function TransactionsPage() {
         <table className="lat-tbl">
           <thead>
             <tr>
-              <th style={{ width: 80 }}>Status</th>
+              <th style={{ width: 72 }}>Status</th>
               <th>Hash</th>
               <th style={{ width: 110 }}>Method</th>
               <th>From</th>
               <th>To</th>
               <th style={{ textAlign: "right", width: 140 }}>Value</th>
-              <th style={{ textAlign: "right", width: 100 }}>Block</th>
-              <th style={{ textAlign: "right", width: 100 }}>Age</th>
+              <th style={{ textAlign: "right", width: 130 }}>Block · Age</th>
             </tr>
           </thead>
           <tbody>
             {isPending ? (
               Array.from({ length: 10 }).map((_, i) => (
                 <tr key={i}>
-                  <td colSpan={8}>
+                  <td colSpan={7}>
                     <Skeleton className="h-4 w-full" />
                   </td>
                 </tr>
@@ -77,29 +76,28 @@ export default function TransactionsPage() {
                       {t.status === "ok" ? "✓ ok" : t.status ?? "—"}
                     </Chip>
                   </td>
-                  <td className="mono">
-                    <Hash value={t.hash} link length={12} />
+                  <td>
+                    <Hash value={t.hash} tone="link" length={12} />
                   </td>
                   <td>
                     {t.method ? (
                       <Chip tone="steel">{t.method}</Chip>
                     ) : (
-                      <span style={{ color: "var(--ink-4)", fontSize: 12 }}>—</span>
+                      <span className="mono" style={{ fontSize: 11.5, color: "var(--ink-4)" }}>
+                        transfer
+                      </span>
                     )}
                   </td>
-                  <td className="mono">
-                    <Hash
-                      value={t.from?.hash ?? ""}
-                      link
-                      length={6}
-                      showCopy={false}
-                    />
+                  <td>
+                    <Hash value={t.from?.hash ?? ""} tone="dim" length={6} />
                   </td>
-                  <td className="mono">
+                  <td>
                     {t.to?.hash ? (
-                      <Hash value={t.to.hash} link length={6} showCopy={false} />
+                      <Hash value={t.to.hash} tone="dim" length={6} />
                     ) : (
-                      <span style={{ color: "var(--ink-4)", fontSize: 12 }}>create</span>
+                      <span className="mono" style={{ fontSize: 11.5, color: "var(--ink-4)" }}>
+                        create
+                      </span>
                     )}
                   </td>
                   <td
@@ -110,22 +108,21 @@ export default function TransactionsPage() {
                   </td>
                   <td
                     className="mono"
-                    style={{ textAlign: "right", color: "var(--ink-2)" }}
+                    style={{ textAlign: "right" }}
                   >
-                    #{formatNumber(t.block_number ?? null)}
-                  </td>
-                  <td
-                    className="mono"
-                    style={{ textAlign: "right", color: "var(--ink-4)" }}
-                  >
-                    {formatRelativeTime(t.timestamp)}
+                    <div style={{ color: "var(--ink-2)", fontSize: 12 }}>
+                      #{formatNumber(t.block_number ?? null)}
+                    </div>
+                    <div style={{ color: "var(--ink-4)", fontSize: 11 }}>
+                      {formatRelativeTime(t.timestamp)}
+                    </div>
                   </td>
                 </tr>
               ))
             ) : (
               <tr>
                 <td
-                  colSpan={8}
+                  colSpan={7}
                   className="text-center py-10"
                   style={{ color: "var(--ink-4)" }}
                 >

@@ -138,6 +138,7 @@
   .mono {
     font-family: var(--font-mono), ui-monospace, monospace;
     font-feature-settings: "ss01", "ss02";
+    font-variant-numeric: tabular-nums;
   }
   .display {
     font-family: var(--font-display), ui-sans-serif, system-ui, sans-serif;
@@ -156,6 +157,7 @@
     letter-spacing: -0.025em;
     line-height: 1;
     color: var(--ink);
+    font-variant-numeric: tabular-nums;
   }
   .rule {
     height: 1px;
@@ -252,6 +254,15 @@
     border-radius: 999px;
     background: var(--good);
     animation: pulse-ring 1.6s ease-out infinite;
+  }
+
+  .fresh-row {
+    animation: slide-in 0.35s ease;
+    background: var(--accent-soft);
+    transition: background 0.8s ease 0.2s;
+  }
+  .fresh-row.fade {
+    background: transparent;
   }
 }
 

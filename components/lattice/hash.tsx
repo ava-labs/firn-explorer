@@ -2,16 +2,19 @@
 
 import { CopyButton } from "./copy-button";
 
+type HashTone = "link" | "plain" | "dim";
+
 export function Hash({
   value,
-  link = false,
+  tone = "link",
   href,
   length = 10,
   className = "",
-  showCopy = true,
+  showCopy = false,
 }: {
   value: string;
-  link?: boolean;
+  /** link = accent-red link styling, plain = ink-2, dim = ink-3 */
+  tone?: HashTone;
   href?: string;
   length?: number;
   className?: string;
@@ -22,9 +25,19 @@ export function Hash({
     length > 0 && value.length > length + 4
       ? `${value.slice(0, length)}…${value.slice(-4)}`
       : value;
+
+  const toneClass =
+    tone === "link" ? "hash-link" : "mono";
+  const toneStyle =
+    tone === "plain"
+      ? { color: "var(--ink-2)" }
+      : tone === "dim"
+        ? { color: "var(--ink-3)" }
+        : undefined;
+
   return (
-    <span className={`hash-link ${className}`}>
-      {link ? (
+    <span className={`${toneClass} ${className}`.trim()} style={toneStyle}>
+      {tone === "link" ? (
         <a
           href={href ?? "#"}
           onClick={(e) => {
