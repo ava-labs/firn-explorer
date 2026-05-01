@@ -20,7 +20,7 @@ export default function BlocksPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Blocks</h1>
         <p className="text-sm text-muted-foreground">
-          Latest blocks indexed by Blockscout. Refreshes every 5s.
+          Latest blocks indexed by Blockscout. Live via WebSocket.
         </p>
       </div>
 

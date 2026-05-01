@@ -26,7 +26,7 @@ export default function TransactionsPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Transactions</h1>
         <p className="text-sm text-muted-foreground">
-          Latest transactions on the chain. Refreshes every 5s.
+          Latest transactions on the chain. Live via WebSocket.
         </p>
       </div>
 
