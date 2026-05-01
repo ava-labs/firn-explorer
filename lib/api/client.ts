@@ -1,28 +1,50 @@
-import type { paths } from "./types.gen";
+// Thin fetch wrapper for the firn v1 API.
+
+import type { APIError } from "./types";
 
 export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_BLOCKSCOUT_API_URL ?? "http://127.0.0.1:4000";
+  process.env.NEXT_PUBLIC_FIRN_URL ?? "http://localhost:4000";
 
-const API_PREFIX = "/api/v2";
+const API_PREFIX = "/v1";
 
-type SuccessResponse<P> = P extends {
-  get: { responses: { 200: { content: { "application/json": infer T } } } };
-}
-  ? T
-  : never;
-
-export async function apiGet<P extends keyof paths>(
-  path: P,
-  init?: RequestInit,
-): Promise<SuccessResponse<paths[P]>> {
-  const url = `${API_BASE_URL}${API_PREFIX}${path as string}`;
+/**
+ * GET /v1<path>. Throws on non-2xx with the API's structured error message
+ * when available, falling back to the HTTP status text.
+ */
+export async function apiGet<T>(path: string, init?: RequestInit): Promise<T> {
+  const url = `${API_BASE_URL}${API_PREFIX}${path}`;
   const res = await fetch(url, {
     ...init,
     headers: { Accept: "application/json", ...(init?.headers ?? {}) },
   });
   if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`GET ${path as string} → ${res.status} ${res.statusText}${body ? `: ${body}` : ""}`);
+    let msg = `${res.status} ${res.statusText}`;
+    try {
+      const body = (await res.json()) as APIError;
+      if (body?.error?.message) msg = `${body.error.code}: ${body.error.message}`;
+    } catch {
+      // body not JSON — keep status text
+    }
+    throw new Error(`GET ${path} → ${msg}`);
   }
-  return res.json() as Promise<SuccessResponse<paths[P]>>;
+  return res.json() as Promise<T>;
+}
+
+/** Build a URL with query parameters, dropping undefined/null values. */
+export function withQuery(
+  path: string,
+  params: Record<string, string | number | undefined | null>,
+): string {
+  const u = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v == null || v === "") continue;
+    u.set(k, String(v));
+  }
+  const qs = u.toString();
+  return qs ? `${path}?${qs}` : path;
+}
+
+/** Derive ws://...  URL from API_BASE_URL for the WebSocket endpoint. */
+export function streamUrl(): string {
+  return API_BASE_URL.replace(/^http/, "ws") + "/v1/stream";
 }

@@ -6,8 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint",
-    "gen:api": "openapi-typescript https://raw.githubusercontent.com/blockscout/blockscout-api-v2-swagger/main/swagger.yaml -o lib/api/types.gen.ts"
+    "lint": "eslint"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",
@@ -17,7 +16,6 @@
     "clsx": "^2.1.1",
     "lucide-react": "^1.14.0",
     "next": "16.2.4",
-    "phoenix": "^1.8.5",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "shadcn": "^4.6.0",
@@ -29,12 +27,10 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
-    "@types/phoenix": "^1.6.7",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.4",
-    "openapi-typescript": "^7.13.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

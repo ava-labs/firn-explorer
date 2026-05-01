@@ -6,7 +6,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { formatNumber, formatRelativeTime } from "@/lib/format";
 
 export default function BlocksPage() {
-  const { data, isPending, error } = useBlocks();
+  const { data: page, isPending, error } = useBlocks({ limit: 50 });
+  const blocks = page?.data;
 
   return (
     <div className="px-10 py-8 pb-12">
@@ -19,7 +20,7 @@ export default function BlocksPage() {
         <span style={{ fontSize: 12, color: "var(--ink-3)" }}>live</span>
       </div>
       <div className="mb-9" style={{ fontSize: 14, color: "var(--ink-3)" }}>
-        Streamed via Phoenix WebSocket directly from the indexer.
+        Streamed via WebSocket directly from the indexer.
       </div>
 
       {error ? (
@@ -45,7 +46,7 @@ export default function BlocksPage() {
         <table className="lat-tbl">
           <thead>
             <tr>
-              <th style={{ width: 120 }}>Height</th>
+              <th style={{ width: 120 }}>Number</th>
               <th>Hash</th>
               <th style={{ textAlign: "right", width: 80 }}>Txns</th>
               <th style={{ textAlign: "right", width: 140 }}>Gas used</th>
@@ -62,11 +63,11 @@ export default function BlocksPage() {
                   </td>
                 </tr>
               ))
-            ) : data?.items.length ? (
-              data.items.map((block) => (
+            ) : blocks?.length ? (
+              blocks.map((block) => (
                 <tr key={block.hash}>
                   <td className="mono" style={{ color: "var(--ink)" }}>
-                    #{formatNumber(block.height)}
+                    #{formatNumber(block.number)}
                   </td>
                   <td>
                     <Hash value={block.hash} tone="link" length={14} />
@@ -75,17 +76,17 @@ export default function BlocksPage() {
                     className="mono"
                     style={{ textAlign: "right", color: "var(--ink-2)" }}
                   >
-                    {block.transactions_count}
+                    {block.transactionsCount}
                   </td>
                   <td
                     className="mono"
                     style={{ textAlign: "right" }}
                   >
-                    {formatNumber(block.gas_used)}
+                    {formatNumber(block.gas.used)}
                   </td>
                   <td>
-                    {block.miner?.hash ? (
-                      <Hash value={block.miner.hash} tone="dim" length={8} />
+                    {block.miner ? (
+                      <Hash value={block.miner} tone="dim" length={8} />
                     ) : (
                       <span style={{ color: "var(--ink-4)" }}>—</span>
                     )}

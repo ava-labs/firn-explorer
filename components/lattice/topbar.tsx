@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { AvalancheLogo } from "./avalanche-logo";
 import { ThemeToggle } from "./theme-toggle";
+import { useChain } from "@/lib/api/queries";
 
 const NAV: ReadonlyArray<{ slug: string; label: string; href: string }> = [
   { slug: "blocks", label: "Blocks", href: "/blocks" },
@@ -116,6 +117,11 @@ export function Topbar() {
 }
 
 function ChainPill() {
+  const { data: chain } = useChain();
+  const name = chain?.name ?? "…";
+  const initial = (name[0] ?? "?").toUpperCase();
+  const network = chain?.network;
+
   return (
     <div
       className="inline-flex items-center gap-2 border rounded-full bg-bg-elev cursor-pointer select-none"
@@ -125,7 +131,11 @@ function ChainPill() {
         fontSize: 12,
         color: "var(--ink-2)",
       }}
-      title="Connected chain"
+      title={
+        chain
+          ? `${chain.name} · chainId ${chain.chainId} · ${chain.network}`
+          : "Connecting to firn…"
+      }
     >
       <span
         className="rounded-full grid place-items-center text-white"
@@ -138,10 +148,22 @@ function ChainPill() {
           fontWeight: 700,
         }}
       >
-        A
+        {initial}
       </span>
-      <span style={{ fontWeight: 500, color: "var(--ink)" }}>Avalanche</span>
-      <span style={{ color: "var(--ink-4)", fontFamily: "var(--font-mono)" }}>L1</span>
+      <span style={{ fontWeight: 500, color: "var(--ink)" }}>{name}</span>
+      {network ? (
+        <span
+          style={{
+            color: "var(--ink-4)",
+            fontFamily: "var(--font-mono)",
+            textTransform: "uppercase",
+            fontSize: 10,
+            letterSpacing: "0.06em",
+          }}
+        >
+          {network}
+        </span>
+      ) : null}
     </div>
   );
 }

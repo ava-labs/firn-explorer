@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransactions } from "@/lib/api/queries";
+import { useTransactions, useChain } from "@/lib/api/queries";
 import { Hash } from "@/components/lattice/hash";
 import { Chip } from "@/components/lattice/chip";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -11,7 +11,10 @@ import {
 } from "@/lib/format";
 
 export default function TransactionsPage() {
-  const { data, isPending, error } = useTransactions();
+  const { data: page, isPending, error } = useTransactions({ limit: 50 });
+  const { data: chain } = useChain();
+  const txs = page?.data;
+  const symbol = chain?.nativeToken.symbol ?? "—";
 
   return (
     <div className="px-10 py-8 pb-12">
@@ -68,34 +71,40 @@ export default function TransactionsPage() {
                   </td>
                 </tr>
               ))
-            ) : data?.items.length ? (
-              data.items.map((t) => (
+            ) : txs?.length ? (
+              txs.map((t) => (
                 <tr key={t.hash}>
                   <td>
-                    <Chip tone={t.status === "ok" ? "good" : "bad"}>
-                      {t.status === "ok" ? "✓ ok" : t.status ?? "—"}
+                    <Chip tone={t.status === "success" ? "good" : "bad"}>
+                      {t.status === "success" ? "✓ ok" : t.status}
                     </Chip>
                   </td>
                   <td>
                     <Hash value={t.hash} tone="link" length={12} />
                   </td>
                   <td>
-                    {t.method ? (
-                      <Chip tone="steel">{t.method}</Chip>
+                    {t.method.name ? (
+                      <Chip tone="steel">{t.method.name}</Chip>
                     ) : (
-                      <span className="mono" style={{ fontSize: 11.5, color: "var(--ink-4)" }}>
-                        transfer
+                      <span
+                        className="mono"
+                        style={{ fontSize: 11.5, color: "var(--ink-4)" }}
+                      >
+                        {t.method.selector}
                       </span>
                     )}
                   </td>
                   <td>
-                    <Hash value={t.from?.hash ?? ""} tone="dim" length={6} />
+                    <Hash value={t.from} tone="dim" length={6} />
                   </td>
                   <td>
-                    {t.to?.hash ? (
-                      <Hash value={t.to.hash} tone="dim" length={6} />
+                    {t.to ? (
+                      <Hash value={t.to} tone="dim" length={6} />
                     ) : (
-                      <span className="mono" style={{ fontSize: 11.5, color: "var(--ink-4)" }}>
+                      <span
+                        className="mono"
+                        style={{ fontSize: 11.5, color: "var(--ink-4)" }}
+                      >
                         create
                       </span>
                     )}
@@ -104,17 +113,17 @@ export default function TransactionsPage() {
                     className="mono"
                     style={{ textAlign: "right", color: "var(--ink)" }}
                   >
-                    {formatNativeAmount(t.value as string | undefined)}
+                    {formatNativeAmount(t.value, symbol)}
                   </td>
                   <td
                     className="mono"
                     style={{ textAlign: "right" }}
                   >
                     <div style={{ color: "var(--ink-2)", fontSize: 12 }}>
-                      #{formatNumber(t.block_number ?? null)}
+                      #{formatNumber(t.block.number)}
                     </div>
                     <div style={{ color: "var(--ink-4)", fontSize: 11 }}>
-                      {formatRelativeTime(t.timestamp)}
+                      {formatRelativeTime(t.block.timestamp)}
                     </div>
                   </td>
                 </tr>
