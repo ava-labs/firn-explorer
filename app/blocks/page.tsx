@@ -1,85 +1,121 @@
 "use client";
 
 import { useBlocks } from "@/lib/api/queries";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Hash } from "@/components/lattice/hash";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatNumber, formatRelativeTime, truncateHash } from "@/lib/format";
+import { formatNumber, formatRelativeTime } from "@/lib/format";
 
 export default function BlocksPage() {
   const { data, isPending, error } = useBlocks();
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Blocks</h1>
-        <p className="text-sm text-muted-foreground">
-          Latest blocks indexed by Blockscout. Live via WebSocket.
-        </p>
+    <div className="px-10 py-8 pb-12">
+      <div className="eyebrow mb-2.5">◆ Blocks</div>
+      <div className="flex items-baseline gap-3 mb-2">
+        <span className="h-display" style={{ fontSize: 56 }}>
+          Latest blocks
+        </span>
+        <span className="live-dot" />
+        <span style={{ fontSize: 12, color: "var(--ink-3)" }}>live</span>
+      </div>
+      <div className="mb-9" style={{ fontSize: 14, color: "var(--ink-3)" }}>
+        Streamed via Phoenix WebSocket directly from the indexer.
       </div>
 
       {error ? (
-        <div className="rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm">
-          <p className="font-medium">Couldn&apos;t load blocks</p>
-          <p className="text-muted-foreground mt-1 font-mono text-xs">{error.message}</p>
+        <div
+          className="border rounded-md p-4 mb-6"
+          style={{
+            borderColor: "var(--accent-soft)",
+            background: "var(--accent-soft)",
+            color: "var(--accent-ink)",
+            fontSize: 13,
+          }}
+        >
+          <div style={{ fontWeight: 500, marginBottom: 4 }}>
+            Couldn&apos;t load blocks
+          </div>
+          <div className="mono" style={{ fontSize: 11.5, color: "var(--ink-3)" }}>
+            {error.message}
+          </div>
         </div>
       ) : null}
 
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-[110px]">Height</TableHead>
-              <TableHead>Hash</TableHead>
-              <TableHead className="text-right w-[80px]">Txs</TableHead>
-              <TableHead className="text-right w-[140px]">Gas used</TableHead>
-              <TableHead className="text-right w-[120px]">Age</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
+      <div className="card border border-line rounded-[10px] bg-bg-elev">
+        <table className="lat-tbl">
+          <thead>
+            <tr>
+              <th style={{ width: 120 }}>Height</th>
+              <th>Hash</th>
+              <th style={{ textAlign: "right", width: 80 }}>Txns</th>
+              <th style={{ textAlign: "right", width: 140 }}>Gas used</th>
+              <th>Validator</th>
+              <th style={{ textAlign: "right", width: 100 }}>Age</th>
+            </tr>
+          </thead>
+          <tbody>
             {isPending ? (
-              Array.from({ length: 8 }).map((_, i) => (
-                <TableRow key={i}>
-                  <TableCell><Skeleton className="h-4 w-16" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-72" /></TableCell>
-                  <TableCell className="text-right"><Skeleton className="h-4 w-8 ml-auto" /></TableCell>
-                  <TableCell className="text-right"><Skeleton className="h-4 w-20 ml-auto" /></TableCell>
-                  <TableCell className="text-right"><Skeleton className="h-4 w-14 ml-auto" /></TableCell>
-                </TableRow>
+              Array.from({ length: 10 }).map((_, i) => (
+                <tr key={i}>
+                  <td colSpan={6}>
+                    <Skeleton className="h-4 w-full" />
+                  </td>
+                </tr>
               ))
             ) : data?.items.length ? (
               data.items.map((block) => (
-                <TableRow key={block.hash}>
-                  <TableCell className="font-mono">{formatNumber(block.height)}</TableCell>
-                  <TableCell className="font-mono text-xs text-muted-foreground">
-                    {truncateHash(block.hash, 8, 6)}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
+                <tr key={block.hash}>
+                  <td className="mono" style={{ color: "var(--ink)" }}>
+                    #{formatNumber(block.height)}
+                  </td>
+                  <td className="mono">
+                    <Hash value={block.hash} link length={14} />
+                  </td>
+                  <td
+                    className="mono"
+                    style={{ textAlign: "right", color: "var(--ink-2)" }}
+                  >
                     {block.transactions_count}
-                  </TableCell>
-                  <TableCell className="text-right font-mono text-xs">
+                  </td>
+                  <td
+                    className="mono"
+                    style={{ textAlign: "right" }}
+                  >
                     {formatNumber(block.gas_used)}
-                  </TableCell>
-                  <TableCell className="text-right text-muted-foreground text-xs">
+                  </td>
+                  <td className="mono">
+                    {block.miner?.hash ? (
+                      <Hash
+                        value={block.miner.hash}
+                        link
+                        length={8}
+                        showCopy={false}
+                      />
+                    ) : (
+                      <span style={{ color: "var(--ink-4)" }}>—</span>
+                    )}
+                  </td>
+                  <td
+                    className="mono"
+                    style={{ textAlign: "right", color: "var(--ink-4)" }}
+                  >
                     {formatRelativeTime(block.timestamp)}
-                  </TableCell>
-                </TableRow>
+                  </td>
+                </tr>
               ))
             ) : (
-              <TableRow>
-                <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+              <tr>
+                <td
+                  colSpan={6}
+                  className="text-center py-10"
+                  style={{ color: "var(--ink-4)" }}
+                >
                   No blocks yet.
-                </TableCell>
-              </TableRow>
+                </td>
+              </tr>
             )}
-          </TableBody>
-        </Table>
+          </tbody>
+        </table>
       </div>
     </div>
   );

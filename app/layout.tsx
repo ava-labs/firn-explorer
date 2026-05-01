@@ -1,23 +1,43 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
-import Link from "next/link";
+import { Inter, Inter_Tight, JetBrains_Mono } from "next/font/google";
 import { Providers } from "./providers";
+import { Topbar } from "@/components/lattice/topbar";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const interTight = Inter_Tight({
+  variable: "--font-display",
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const inter = Inter({
+  variable: "--font-ui",
   subsets: ["latin"],
+  weight: ["400", "500", "600"],
+});
+
+const jetbrains = JetBrains_Mono({
+  variable: "--font-mono",
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
 });
 
 export const metadata: Metadata = {
-  title: "L1 Explorer",
+  title: "Lattice Explorer",
   description: "Block explorer for Avalanche L1s",
 };
+
+const themeBootstrap = `
+(function(){
+  try {
+    var t = localStorage.getItem('lattice:theme');
+    if (!t) {
+      t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+    document.documentElement.setAttribute('data-theme', t);
+  } catch (_) {}
+})();
+`;
 
 export default function RootLayout({
   children,
@@ -27,29 +47,16 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${interTight.variable} ${inter.variable} ${jetbrains.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col">
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeBootstrap }} />
+      </head>
+      <body className="min-h-full flex flex-col bg-bg text-ink">
         <Providers>
-          <header className="border-b">
-            <nav className="mx-auto max-w-6xl px-4 h-14 flex items-center gap-6 text-sm">
-              <Link href="/" className="font-semibold">
-                L1 Explorer
-              </Link>
-              <Link href="/blocks" className="text-muted-foreground hover:text-foreground">
-                Blocks
-              </Link>
-              <Link
-                href="/transactions"
-                className="text-muted-foreground hover:text-foreground"
-              >
-                Transactions
-              </Link>
-            </nav>
-          </header>
-          <main className="mx-auto w-full max-w-6xl px-4 py-8 flex-1">
-            {children}
-          </main>
+          <Topbar />
+          <main className="flex-1 overflow-auto">{children}</main>
         </Providers>
       </body>
     </html>
