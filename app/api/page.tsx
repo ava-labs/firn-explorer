@@ -17,7 +17,7 @@
  */
 
 import dynamic from "next/dynamic";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { getApiBase } from "@/lib/api/client";
 import "@scalar/api-reference-react/style.css";
 
@@ -28,8 +28,24 @@ const ApiReferenceReact = dynamic(
   { ssr: false },
 );
 
+// Mirror the rest of the app's theme: <html data-theme="dark|light">.
+// Scalar manages its own internal mode otherwise, which drifts from the
+// Lattice toggle.
+function subscribeTheme(onChange: () => void): () => void {
+  const obs = new MutationObserver(onChange);
+  obs.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ["data-theme"],
+  });
+  return () => obs.disconnect();
+}
+function getThemeSnapshot(): "dark" | "light" {
+  return document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
+}
+
 export default function APIReferencePage() {
   const [specUrl, setSpecUrl] = useState<string | null>(null);
+  const theme = useSyncExternalStore(subscribeTheme, getThemeSnapshot, () => "light" as const);
 
   useEffect(() => {
     const apiBase = getApiBase();
@@ -60,6 +76,7 @@ export default function APIReferencePage() {
         configuration={{
           url: specUrl,
           theme: "default",
+          forceDarkModeState: theme,
           hideDownloadButton: false,
         }}
       />
