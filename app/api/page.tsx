@@ -3,12 +3,21 @@
 import { useEffect, useMemo, useState } from "react";
 import { getApiBase } from "@/lib/api/client";
 import { useChain } from "@/lib/api/queries";
-import { CATALOG, type Endpoint, type Param } from "./catalog";
+import { CATALOG, type Endpoint, type Param, type Group } from "./catalog";
+import { useFirnRoutes } from "./use-firn-routes";
 
 const STORAGE_KEY = "explorer:api-playground:endpoint";
 
 export default function APIPlaygroundPage() {
   const { data: chain } = useChain();
+
+  // Live route inventory from firn's /v1/_meta/routes — the source of
+  // truth, decorated with rich playground inputs from the local CATALOG
+  // when a path+method match exists. Falls back to the bundled CATALOG
+  // until the fetch resolves so the first paint isn't a skeleton.
+  const { data: live } = useFirnRoutes();
+  const groups: Group[] = live?.groups ?? CATALOG;
+
   // Lazy initial state restores the last-picked endpoint synchronously on
   // the client so the first render already shows the right row — no
   // setState-in-effect cascade. SSR returns the catalog default.
@@ -29,9 +38,10 @@ export default function APIPlaygroundPage() {
 
   const endpoint = useMemo(
     () =>
-      CATALOG.flatMap((g) => g.endpoints).find((e) => e.id === selectedId) ??
+      groups.flatMap((g) => g.endpoints).find((e) => e.id === selectedId) ??
+      groups[0]?.endpoints[0] ??
       CATALOG[0].endpoints[0],
-    [selectedId],
+    [selectedId, groups],
   );
 
   return (
@@ -43,13 +53,21 @@ export default function APIPlaygroundPage() {
         minHeight: "calc(100vh - 60px)",
       }}
     >
-      <Sidebar selectedId={selectedId} onSelect={setSelectedId} />
+      <Sidebar selectedId={selectedId} onSelect={setSelectedId} groups={groups} />
       <Main endpoint={endpoint} chainBase={getApiBase()} chainHelpers={chain} />
     </div>
   );
 }
 
-function Sidebar({ selectedId, onSelect }: { selectedId: string; onSelect: (id: string) => void }) {
+function Sidebar({
+  selectedId,
+  onSelect,
+  groups,
+}: {
+  selectedId: string;
+  onSelect: (id: string) => void;
+  groups: Group[];
+}) {
   return (
     <aside
       style={{
@@ -66,7 +84,7 @@ function Sidebar({ selectedId, onSelect }: { selectedId: string; onSelect: (id: 
       <div className="h-display mb-5" style={{ fontSize: 24 }}>
         firn v1
       </div>
-      {CATALOG.map((group) => (
+      {groups.map((group) => (
         <div key={group.id} style={{ marginBottom: 18 }}>
           <div className="eyebrow" style={{ marginBottom: 8, fontSize: 10, color: "var(--ink-4)" }}>
             {group.label}
