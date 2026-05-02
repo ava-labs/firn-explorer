@@ -28,38 +28,33 @@ jobs:
       - name: Install deps
         run: pnpm install --frozen-lockfile
 
-      # Type errors are hard fails — anything that compiled-out-of-skew
-      # with the rest of the repo blocks merge.
+      # The vendored openapi.json (./openapi.json) is the spec input
+      # for orval. CI re-runs codegen against it and fails if any
+      # generated file changed — catches "I changed the spec but
+      # forgot to run pnpm codegen".
+      #
+      # Phase 2 will swap this for a path-checkout of firn so the
+      # check pulls the live spec instead of trusting the vendored
+      # copy. For now drift is caught at the spec-vendoring step
+      # (sync-spec is a manual operator action; review enforces it).
+      - name: Codegen drift
+        run: |
+          pnpm codegen
+          if ! git diff --exit-code -- lib/api/generated openapi.json; then
+            echo "::error::Generated API client is out of sync with openapi.json. Run 'pnpm sync-spec && pnpm codegen' locally and commit the result."
+            exit 1
+          fi
+
       - name: Typecheck
         run: pnpm typecheck
 
-      # Lint runs the firn-local/enforce-network-query-key rule among
-      # others. New useQuery sites without network-scoped keys block CI;
-      # see eslint-rules/enforce-network-query-key.js for the rationale
-      # and `/* network-agnostic */` opt-out for legitimately-global
-      # queries (Sourcify, openchain.xyz, 4byte.directory).
-      #
-      # --max-warnings=0 means new warnings block merge — the baseline
-      # is clean as of chore/lint-enforcement, and we want it to stay
-      # that way. If a legitimately-architectural pattern trips a rule
-      # (RAF-driven refs-in-render in sparkline / page address-delta),
-      # add a focused eslint-disable with a one-line rationale.
       - name: Lint
         run: pnpm exec eslint . --max-warnings=0
 
-      # Prettier is a separate enforcement loop from ESLint —
-      # eslint-config-prettier disables conflicting rules so the two
-      # don't fight each other on whitespace.
       - name: Format check
         run: pnpm format:check
 
-      # Final integration smoke: build the production bundle. Catches
-      # SSR-time errors (server components, "use client" mismatches,
-      # static-export incompatibilities) that lint + typecheck alone
-      # don't see.
       - name: Build
         run: pnpm build
         env:
-          # CI build doesn't need to talk to a real firn — env vars are
-          # only read at runtime in the browser.
           NEXT_PUBLIC_FIRN_LOCAL: http://localhost:4000

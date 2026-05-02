@@ -1,17 +1,31 @@
-// Thin fetch wrapper for the firn v1 API.
+// Thin client glue for firn — JSON-RPC POST + apiBase state.
+//
+// The bulk of the typed REST surface flows through orval-generated
+// hooks (lib/api/generated/firn.ts) that share the apiBase + error
+// shape defined here via the mutator (lib/api/generated-mutator.ts).
+//
+// What stays here:
+//   * `getApiBase()` / `setApiBase()` — module-global the
+//     NetworkProvider mutates on network swap. Both this module and
+//     the generated mutator read from it.
+//   * `FirnApiError` — error class the mutator throws on RFC 9457
+//     responses; some pages branch on `.code === "bootstrapping"`.
+//   * `pchainCall()` — JSON-RPC helper for /v1/rpc/p, used directly
+//     where a typed REST hook isn't available (`platform.getL1Validator`).
+//     The opaque RPC body is unspec'd in openapi.json so a generated
+//     client wouldn't help us here.
 
-import type { APIError } from "./types";
+interface APIErrorEnvelope {
+  error?: { code?: string; message?: string };
+  detail?: string;
+  type?: string;
+}
 
 /**
  * Default base URL — falls back through, in priority order:
  *   1. NEXT_PUBLIC_FIRN_LOCAL    — explicit local override
  *   2. NEXT_PUBLIC_FIRN_URL      — legacy single-URL var (back-compat)
  *   3. http://localhost:4000     — dev default
- *
- * Multi-network deployments are driven by the runtime base set via
- * `setApiBase()` (called by the NetworkProvider when the user picks a
- * different network in the topbar). Per-network env vars are read at the
- * provider layer, not here, so this module stays free of React deps.
  */
 export const DEFAULT_API_BASE_URL =
   process.env.NEXT_PUBLIC_FIRN_LOCAL ?? process.env.NEXT_PUBLIC_FIRN_URL ?? "http://localhost:4000";
@@ -31,11 +45,9 @@ export function getApiBase(): string {
 const API_PREFIX = "/v1";
 
 /**
- * Typed error thrown by apiGet / pchainCall on non-2xx responses. Carries
- * firn's structured error code (e.g. "bootstrapping", "not_found") so
- * callers can branch on the cause without grepping the message string.
- * `status` is the HTTP status; `code` is empty when the upstream didn't
- * return a JSON error envelope.
+ * Typed error thrown by the generated mutator + pchainCall on non-2xx.
+ * Carries firn's structured error code (e.g. "bootstrapping") so callers
+ * can branch on the cause without grepping the message string.
  */
 export class FirnApiError extends Error {
   readonly status: number;
@@ -49,49 +61,11 @@ export class FirnApiError extends Error {
 }
 
 /**
- * GET /v1<path>. Throws FirnApiError on non-2xx with the API's structured
- * error code populated when available.
- */
-export async function apiGet<T>(path: string, init?: RequestInit): Promise<T> {
-  const url = `${getApiBase()}${API_PREFIX}${path}`;
-  const res = await fetch(url, {
-    ...init,
-    headers: { Accept: "application/json", ...(init?.headers ?? {}) },
-  });
-  if (!res.ok) {
-    let msg = `${res.status} ${res.statusText}`;
-    let code = "";
-    try {
-      const body = (await res.json()) as APIError;
-      if (body?.error?.code) code = body.error.code;
-      if (body?.error?.message) msg = `${body.error.code}: ${body.error.message}`;
-    } catch {
-      // body not JSON — keep status text
-    }
-    throw new FirnApiError(`GET ${path} → ${msg}`, res.status, code);
-  }
-  return res.json() as Promise<T>;
-}
-
-/** Build a URL with query parameters, dropping undefined/null values. */
-export function withQuery(
-  path: string,
-  params: Record<string, string | number | undefined | null>,
-): string {
-  const u = new URLSearchParams();
-  for (const [k, v] of Object.entries(params)) {
-    if (v == null || v === "") continue;
-    u.set(k, String(v));
-  }
-  const qs = u.toString();
-  return qs ? `${path}?${qs}` : path;
-}
-
-/**
  * JSON-RPC call against firn's P-Chain passthrough (`POST /v1/rpc/p`).
- * `method` should be a P-Chain `platform.*` method per
- * https://build.avax.network/docs/rpcs/p-chain. Returns the raw `result`
- * field; throws on `error` or transport failure.
+ * The endpoint exists in openapi.json with an opaque body schema, so
+ * orval generated a `useMutation` hook for it — but every existing call
+ * site is a `useQuery` (we want it cached). Rather than reinvent caching
+ * on top of a mutation, we keep this thin POST helper.
  */
 export async function pchainCall<T = unknown>(
   method: string,
@@ -113,7 +87,7 @@ export async function pchainCall<T = unknown>(
   if (!res.ok) {
     let msg = `${res.status} ${res.statusText}`;
     try {
-      const errBody = (await res.json()) as APIError;
+      const errBody = (await res.json()) as APIErrorEnvelope;
       if (errBody?.error?.message) msg = `${errBody.error.code}: ${errBody.error.message}`;
     } catch {
       /* keep status text */

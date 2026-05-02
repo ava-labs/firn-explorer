@@ -19,7 +19,7 @@ import {
 } from "@/components/lattice/sortable-th";
 import { useFreshKeys, useNowTick } from "@/lib/use-fresh";
 import { formatNumber, formatRelativeTime } from "@/lib/format";
-import type { ICMKind, ICMMessage } from "@/lib/api/types";
+import type { ICMKind, ICMMessage } from "@/lib/api/queries";
 
 type KindFilter = "all" | "teleporter" | "warp";
 type SortKey = "layer" | "event" | "block";
@@ -87,7 +87,7 @@ export default function ICMPage() {
   }
 
   return (
-    <div className="px-10 py-8 pb-12">
+    <div className="px-4 sm:px-6 lg:px-10 py-6 sm:py-8 pb-12">
       <div className="eyebrow mb-2.5">◆ Cross-chain · ICM</div>
       <div className="flex items-baseline gap-3 mb-2">
         <span className="h-display" style={{ fontSize: 56 }}>

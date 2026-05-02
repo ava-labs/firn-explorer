@@ -13,7 +13,7 @@ import { KpiCell } from "@/components/page/kpi-cell";
 import { useFreshHashes, useFreshKeys, useNowTick } from "@/lib/use-fresh";
 import { useExplorerBootstrap } from "@/lib/api/explorer";
 import { useLivePause, type LiveFeed } from "@/lib/api/live-pause";
-import type { ICMMessage } from "@/lib/api/types";
+import type { ICMMessage } from "@/lib/api/queries";
 import {
   formatNativeAmount,
   formatNumber,
@@ -125,9 +125,11 @@ export default function Home() {
   const addrDelta = useAddressDelta(stats?.totalAddresses, 60_000);
 
   return (
-    <div className="px-10 py-8 pb-12">
-      {/* Hero row: headline stat + live block ticker */}
-      <div className="grid gap-12 items-start mb-14" style={{ gridTemplateColumns: "1.4fr 1fr" }}>
+    <div className="px-4 sm:px-6 lg:px-10 py-6 sm:py-8 pb-12">
+      {/* Hero row: headline stat + live block ticker. Stacks on mobile so
+          the giant block-count number gets the full width and the ticker
+          falls below; switches to the original 1.4fr / 1fr split at lg. */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-8 lg:gap-12 items-start mb-10 lg:mb-14">
         <div>
           <div className="eyebrow mb-5">
             ◆ {chain?.name ?? "…"}
@@ -153,11 +155,10 @@ export default function Home() {
             ) : null}
           </div>
 
-          {/* KPI strip */}
+          {/* KPI strip — 2-up on phones, 4-up at sm and above. */}
           <div
-            className="grid"
+            className="grid grid-cols-2 sm:grid-cols-4"
             style={{
-              gridTemplateColumns: "repeat(4, 1fr)",
               borderTop: "1px solid var(--line)",
             }}
           >

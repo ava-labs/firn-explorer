@@ -35,6 +35,12 @@ export function Hash({
     length > 0 && value.length > length + 4
       ? `${value.slice(0, length)}…${value.slice(-4)}`
       : value;
+  // When the caller asked for the full string (`length === 0`), allow
+  // the browser to wrap mid-hash on tight columns — full 0x… hashes are
+  // 66 characters and will otherwise force horizontal scrolling on a
+  // 360px-wide viewport. Truncated forms have a soft ellipsis already
+  // and don't need this.
+  const showsFull = length === 0;
 
   const toneClass = tone === "link" ? "hash-link" : "mono";
   const toneStyle: React.CSSProperties | undefined = (() => {
@@ -67,7 +73,13 @@ export function Hash({
     );
 
   return (
-    <span className={`${toneClass} ${className}`.trim()} style={toneStyle}>
+    <span
+      className={`${toneClass} ${className}`.trim()}
+      style={{
+        ...toneStyle,
+        ...(showsFull ? { wordBreak: "break-all" as const } : null),
+      }}
+    >
       {inner}
       {showCopy ? <CopyButton text={value} /> : null}
     </span>

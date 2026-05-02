@@ -8,7 +8,7 @@ import { CopyButton } from "@/components/lattice/copy-button";
 import { Tabs } from "@/components/lattice/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useChain, useL1Uptime, useL1Validator, useValidators } from "@/lib/api/queries";
-import type { L1ValidatorDetails, RewardOwner, Validator } from "@/lib/api/types";
+import type { L1ValidatorDetails, RewardOwner, Validator } from "@/lib/api/queries";
 import { useNowTick } from "@/lib/use-fresh";
 import { formatNumber } from "@/lib/format";
 
@@ -549,7 +549,11 @@ export default function ValidatorDetailPage({ params }: { params: Promise<{ node
 // ---------------------------------------------------------------------------
 
 function Page({ children }: { children: ReactNode }) {
-  return <div className="px-10 py-8 pb-12 max-w-[1080px] mx-auto">{children}</div>;
+  return (
+    <div className="px-4 sm:px-6 lg:px-10 py-6 sm:py-8 pb-12 max-w-[1080px] mx-auto">
+      {children}
+    </div>
+  );
 }
 
 function BackLink() {

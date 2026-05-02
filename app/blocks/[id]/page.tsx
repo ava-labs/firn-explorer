@@ -28,7 +28,7 @@ import {
   gasUtilization,
 } from "@/lib/format";
 import { decodeCorethExtra } from "@/lib/coreth-extra";
-import type { ICMMessage } from "@/lib/api/types";
+import type { ICMMessage } from "@/lib/api/queries";
 
 type TabId = "overview" | "txs" | "icm" | "consensus";
 
@@ -63,7 +63,7 @@ export default function BlockDetailPage({ params }: { params: Promise<{ id: stri
   }
 
   return (
-    <div className="px-10 py-8 pb-12 max-w-[1080px] mx-auto">
+    <div className="px-4 sm:px-6 lg:px-10 py-6 sm:py-8 pb-12 max-w-[1080px] mx-auto">
       <div className="eyebrow mb-2.5">◆ Block</div>
 
       {/* Headline */}
@@ -95,11 +95,10 @@ export default function BlockDetailPage({ params }: { params: Promise<{ id: stri
         )}
       </div>
 
-      {/* Stat strip */}
+      {/* Stat strip — 2-up on phones, 5-up at md+. */}
       <div
-        className="grid"
+        className="grid grid-cols-2 md:grid-cols-5"
         style={{
-          gridTemplateColumns: "repeat(5, 1fr)",
           borderTop: "1px solid var(--line)",
           borderBottom: "1px solid var(--line)",
           marginBottom: 28,
@@ -345,7 +344,7 @@ export default function BlockDetailPage({ params }: { params: Promise<{ id: stri
  * AvalancheGo's runtime metrics rather than per-block storage; surfacing
  * those would require a separate metrics-scraping path in firn.
  */
-function ConsensusTab({ block }: { block: import("@/lib/api/types").Block }) {
+function ConsensusTab({ block }: { block: import("@/lib/api/queries").Block }) {
   // Parent block for inter-block latency. firn caches hash-keyed lookups.
   const { data: parent } = useBlock(block.number > 0 ? block.parentHash : undefined);
   // Live ProposerVM state via firn's /v1/chain/proposer bridge. Chain-level

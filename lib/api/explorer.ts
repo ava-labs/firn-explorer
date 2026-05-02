@@ -2,18 +2,26 @@
 
 import { useEffect, useRef } from "react";
 import { useQuery, useQueryClient, type UseQueryOptions } from "@tanstack/react-query";
-import { apiGet, getApiBase } from "./client";
+import { getApiBase } from "./client";
 import { useNetwork } from "./network";
 import { useLivePause, type LivePauseState } from "./live-pause";
-import type { Block, Chain, Stats, Transaction, ICMMessage } from "./types";
+import { getExplorerBootstrap, getGetExplorerBootstrapUrl } from "./generated/firn";
+import { firnQueryKey } from "./generated-query-key";
+import type {
+  Block,
+  Chain,
+  ExplorerBootstrap as GeneratedExplorerBootstrap,
+  Stats,
+  Transaction,
+} from "./generated/schemas";
+import type { ICMMessage } from "./queries";
 
 /**
- * Wire types for the firn explorer endpoints. Mirrors the Go-side
- * shapes in firn/internal/api/explorer.go. If you change one, change
- * the other — there's no shared schema today (intentional: the
- * bootstrap layer is opinionated toward this UI and gets to evolve
- * fast). Once the wire stabilises we'll lift it into a generated
- * types package.
+ * Wire types for the firn explorer endpoints. The REST shape comes from
+ * the generated `ExplorerBootstrap`, but the SSE feed
+ * (`/v1/explorer/feed`) is server-sent-events — not in openapi.json —
+ * so its tick payload stays hand-typed here. Keep in sync with
+ * firn/internal/api/explorer.go.
  */
 export interface ExplorerTPS {
   cadence: "block" | "wallclock-1s";
@@ -48,11 +56,7 @@ export interface ExplorerFeedTick {
   cause: "block" | "wallclock";
   from: number;
   to: number;
-  /**
-   * How many block slots the sparkline should scroll. Always 0 for
-   * `cause: "wallclock"` ticks. Replaces the old client-side
-   * `detectShift()` walk.
-   */
+  /** How many block slots the sparkline should scroll. 0 for wallclock. */
   shift: number;
   blocks: Block[];
   txs: Transaction[];
@@ -68,23 +72,18 @@ type QueryOpts<T> = Omit<UseQueryOptions<T, Error, T, readonly unknown[]>, "quer
 
 /**
  * `GET /v1/explorer/bootstrap` — single round-trip first-paint payload
- * for the home page. Replaces the parallel useChain + useStats +
- * useBlocks + useTransactions + useICMMessages fetch fan-out, which
- * caused a visible skeleton flicker on every network swap.
- *
- * Cache key includes the network's apiBase so switching networks
- * consults a different slot — no cross-network pollution, instant
- * paint when switching back to a previously-visited network.
+ * for the home page. Cache key is `[apiBase, "/v1/explorer/bootstrap"]`
+ * per the orval `firnQueryKey` mutator — switching networks consults a
+ * different slot, no cross-network pollution, instant paint when
+ * switching back.
  */
 export function useExplorerBootstrap(opts?: QueryOpts<ExplorerBootstrap>) {
-  const { config } = useNetwork();
-  const net = config.url ?? "";
   return useQuery({
-    queryKey: ["explorer-bootstrap", net] as const,
-    queryFn: () => apiGet<ExplorerBootstrap>("/explorer/bootstrap"),
-    // First paint matters; revalidate on focus would re-trigger a
-    // perceptible refresh. The SSE feed keeps the cache fresh while
-    // mounted — focus-revalidate is just noise.
+    queryKey: firnQueryKey({}, { url: getGetExplorerBootstrapUrl() }),
+    queryFn: ({ signal }) =>
+      getExplorerBootstrap(undefined, { signal }).then((b) =>
+        normalizeBootstrap(b as unknown as GeneratedExplorerBootstrap),
+      ),
     refetchOnWindowFocus: false,
     staleTime: 30 * 1000,
     ...opts,
@@ -92,96 +91,61 @@ export function useExplorerBootstrap(opts?: QueryOpts<ExplorerBootstrap>) {
 }
 
 /**
- * Topics the bridge invalidates on a block-cause tick. Each per-page
- * list cache key in `lib/api/queries.ts` starts with one of these
- * strings and ends with the network's apiBase (see `useNetKey`), so a
- * predicate match on `[topic, apiBase]` invalidates exactly the active
- * network's slot — no cross-network cache pollution.
- *
- * `chain` + `stats` keep the topbar counters in sync with firn's
- * authoritative state (the topbar reads stats; chain rarely changes
- * but the throttle makes the cost negligible). The `tokens` /
- * `token` / `token-transfers` / `address-transactions` /
- * `block-transactions` topics are inactive on most pages — invalidates
- * are essentially free if no matching query is mounted.
+ * Hoist the spec's nullable arrays (`blocks: Block[] | null`) into the
+ * non-null shapes the components were written against.
  */
-const FEED_TOPICS = [
-  "blocks",
-  "transactions",
-  "icm-messages",
-  "teleporter-messages",
-  "stats",
-  "chain",
-  "tokens",
-  "token",
-  "token-transfers",
-  "address-transactions",
-  "block-transactions",
-] as const;
-type FeedTopic = (typeof FEED_TOPICS)[number];
+function normalizeBootstrap(b: GeneratedExplorerBootstrap): ExplorerBootstrap {
+  return {
+    tick: b.tick,
+    chain: b.chain,
+    stats: { ...b.stats, tps: b.stats.tps as ExplorerTPS },
+    blocks: b.blocks ?? [],
+    transactions: b.transactions ?? [],
+    icmMessages: (b.icmMessages ?? []) as ICMMessage[],
+  };
+}
 
 /**
- * Per-topic throttle floor in ms. Without this, a 100ms-block chain
- * fires ten invalidates/second per topic — enough to make the React
- * Query cache thrash and (worse) make filtered/paginated lists visibly
- * empty + repopulate as the refetch lands. 1.5s is the floor used by
- * the previous WS-based bridge, retained here so the perceived live
- * cadence is unchanged across the migration.
+ * Topics the bridge invalidates on a block-cause tick. Each topic is a
+ * URL prefix matched against the second element of orval-generated
+ * query keys (the first is the active apiBase).
  */
+const FEED_TOPIC_PREFIXES = [
+  "/v1/blocks",
+  "/v1/transactions",
+  "/v1/icm/messages",
+  "/v1/teleporter/messages",
+  "/v1/stats",
+  "/v1/chain",
+  "/v1/tokens",
+] as const;
+type FeedTopic = (typeof FEED_TOPIC_PREFIXES)[number];
+
 const TOPIC_THROTTLE_MS = 1500;
 
-/**
- * Topics that should never run while their corresponding feed is
- * paused. Stats/chain/tokens/token/token-transfers stay live so the
- * topbar counters and any open token page keep ticking even when the
- * user has frozen a list.
- */
 function shouldSkipForPause(topic: FeedTopic, paused: LivePauseState): boolean {
-  if (paused.blocks && (topic === "blocks" || topic === "block-transactions")) return true;
-  if (paused.transactions && (topic === "transactions" || topic === "address-transactions"))
+  if (paused.blocks && topic === "/v1/blocks") return true;
+  if (paused.transactions && topic === "/v1/transactions") return true;
+  if (paused.icm && (topic === "/v1/icm/messages" || topic === "/v1/teleporter/messages")) {
     return true;
-  if (paused.icm && (topic === "icm-messages" || topic === "teleporter-messages")) return true;
+  }
   return false;
 }
 
 /**
- * Long-lived SSE connection to firn's `/v1/explorer/feed`. Mount once
- * near the app root inside the QueryClientProvider; each tick event
- * is merged into the bootstrap cache slot so subscribed components
- * re-render without explicit subscription.
- *
- * Auto-reconnects via the browser's EventSource. The `Last-Event-ID`
- * header (which EventSource manages internally) carries the tick
- * counter so firn replays anything we missed during the gap.
- *
- * Beyond the home-page bootstrap merge, the bridge also drives live
- * updates for the per-page lists (/blocks, /transactions, /icm) by
- * invalidating their query caches on each block-cause tick. Wallclock
- * heartbeats carry no new data so they skip invalidation entirely —
- * invalidating on a wallclock would force every filtered/paginated
- * list to refetch and visibly empty + repopulate while the user is
- * scrolling.
+ * Long-lived SSE connection to firn's `/v1/explorer/feed`. SSE / WS
+ * aren't in openapi.json, so this stays a hand-rolled `EventSource`
+ * client.
  */
 export function ExplorerFeedBridge() {
   const queryClient = useQueryClient();
   const { config } = useNetwork();
   const apiBase = config.url ?? "";
-  // Read pause state via ref inside the SSE handler — toggling pause
-  // must NOT re-mount the bridge (would drop the SSE connection and
-  // force a Last-Event-ID replay on every flip).
   const { pausedRef } = useLivePause();
-
-  // Per-topic last-invalidate timestamp. Refs (not state) so the
-  // throttle doesn't trigger renders. Reset on apiBase change so
-  // network swap fires invalidates immediately under the new URL.
   const lastInvalidatedRef = useRef<Map<FeedTopic, number>>(new Map());
 
   useEffect(() => {
     if (!apiBase) return;
-    // Reset throttle bookkeeping per network — when the user swaps
-    // networks we WANT the first tick on the new firn to invalidate
-    // immediately, so the stale (now-wrong-network) cache slots
-    // refetch under the new URL on the very next block.
     lastInvalidatedRef.current = new Map();
 
     const url = `${apiBase}/v1/explorer/feed`;
@@ -196,31 +160,32 @@ export function ExplorerFeedBridge() {
       }
       mergeTickIntoBootstrap(queryClient, apiBase, tick, pausedRef.current);
 
-      // Wallclock ticks scroll the sparkline (handled in the merge
-      // above) but carry no new blocks/txs/icm — invalidating per-page
-      // lists on wallclock would just force a refetch of the same
-      // data, with the visible cost of an empty-then-repopulate flash
-      // on filtered queries.
       if (tick.cause !== "block") return;
 
       const now = Date.now();
       const paused = pausedRef.current;
-      for (const topic of FEED_TOPICS) {
+      for (const topic of FEED_TOPIC_PREFIXES) {
         if (shouldSkipForPause(topic, paused)) continue;
         const last = lastInvalidatedRef.current.get(topic) ?? 0;
         if (now - last < TOPIC_THROTTLE_MS) continue;
         lastInvalidatedRef.current.set(topic, now);
+        // queryKey shape is `[apiBase, url, ...]` per the orval
+        // `firnQueryKey` mutator. apiBase scopes to the active network;
+        // URL prefix matches list pages regardless of cursor / filter
+        // args appended after.
         queryClient.invalidateQueries({
-          predicate: (q) =>
-            Array.isArray(q.queryKey) && q.queryKey[0] === topic && q.queryKey[1] === apiBase,
+          predicate: (q) => {
+            const k = q.queryKey;
+            if (!Array.isArray(k) || k[0] !== apiBase) return false;
+            const u = k[1];
+            return typeof u === "string" && u.startsWith(topic);
+          },
         });
       }
     });
 
     es.onerror = () => {
-      // EventSource auto-reconnects; nothing to do beyond logging.
-      // The Last-Event-ID header carries our tick counter so firn
-      // replays cleanly on reconnect.
+      // EventSource auto-reconnects.
     };
 
     return () => {
@@ -231,38 +196,21 @@ export function ExplorerFeedBridge() {
   return null;
 }
 
-/**
- * Apply a feed tick to the bootstrap cache. Three updates per tick:
- *   1. Prepend new blocks/txs/icm to their lists, capped to the
- *      bootstrap's original window size so high TPS doesn't bloat
- *      the cache indefinitely.
- *   2. Append the tps point to the rolling series, dropping the
- *      oldest to keep the window stable.
- *   3. Apply any stats delta to the headline counters.
- *
- * Caps come from the bootstrap response itself — whatever the server
- * decided is the right window size, we respect it.
- *
- * `paused` gates per-feed merges: a frozen feed keeps showing its
- * last-rendered rows on the home page while the user inspects them.
- * Stats/tps still flow through regardless — the topbar counter and
- * sparkline should keep ticking even when a list is paused, otherwise
- * the page looks broken when the user pauses then walks away.
- */
 function mergeTickIntoBootstrap(
   queryClient: ReturnType<typeof useQueryClient>,
   apiBase: string,
   tick: ExplorerFeedTick,
   paused: LivePauseState,
 ) {
-  queryClient.setQueryData<ExplorerBootstrap>(["explorer-bootstrap", apiBase], (prev) => {
+  void apiBase; // key carries apiBase via firnQueryKey
+  const key = firnQueryKey({}, { url: getGetExplorerBootstrapUrl() });
+  queryClient.setQueryData<ExplorerBootstrap>(key, (prev) => {
     if (!prev) return prev;
 
     const blockCap = prev.blocks.length || 5;
     const txCap = prev.transactions.length || 5;
     const icmCap = prev.icmMessages.length || 6;
 
-    // Dedupe by hash — server may re-emit on its own reconnect path.
     const seenBlocks = new Set(prev.blocks.map((b) => b.hash));
     const newBlocks = paused.blocks ? [] : tick.blocks.filter((b) => !seenBlocks.has(b.hash));
     const seenTxs = new Set(prev.transactions.map((t) => t.hash));
@@ -272,13 +220,6 @@ function mergeTickIntoBootstrap(
       ? []
       : tick.icm.filter((m) => !seenIcm.has(`${m.transactionHash}-${m.logIndex}`));
 
-    // Drop oldest tps point per shift, then fill the freed slots with
-    // the new (smoothed) sample. The backend's tpsPoint is already a
-    // rolling average over the last N blocks, so the in-between slots
-    // for a multi-block shift would have essentially the same value —
-    // padding with zeros here is what created the strobe pattern on
-    // sub-second block chains. For wallclock ticks (shift=0) we still
-    // scroll one slot so dead chains' charts keep moving.
     const advance = Math.max(1, tick.shift);
     const tpsPoints = [
       ...prev.stats.tps.points.slice(advance),
@@ -297,9 +238,6 @@ function mergeTickIntoBootstrap(
         : [...newIcm, ...prev.icmMessages].slice(0, icmCap),
       stats: {
         ...prev.stats,
-        // Apply stats delta when present (block-cause ticks); leave
-        // the topbar counters alone on wallclock heartbeats so they
-        // don't twitch when nothing's actually happening.
         ...(tick.statsDelta
           ? {
               totalBlocks: tick.statsDelta.totalBlocks ?? prev.stats.totalBlocks,
@@ -317,10 +255,6 @@ function mergeTickIntoBootstrap(
       },
     };
 
-    // Apply removedTxs (reorg) by hash filter — even when transactions
-    // are paused, dropping reorg'd hashes prevents stale data on the
-    // home-page list. The user's pause is a "freeze the visible feed"
-    // intent, not a "show me known-wrong rows" one.
     if (tick.removedTxs.length > 0) {
       const removed = new Set(tick.removedTxs);
       next.transactions = next.transactions.filter((t) => !removed.has(t.hash));
@@ -330,7 +264,6 @@ function mergeTickIntoBootstrap(
   });
 }
 
-/** Convenience: read the live tps series for the home-page sparkline. */
 export function useExplorerTps(): number[] | undefined {
   const { data } = useExplorerBootstrap();
   return data?.stats.tps.points;

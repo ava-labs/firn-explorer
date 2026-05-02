@@ -7,7 +7,14 @@ import firnLocal from "./eslint-rules/index.js";
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
-  globalIgnores([".next/**", "out/**", "build/**", "next-env.d.ts", "eslint-rules/**"]),
+  globalIgnores([
+    ".next/**",
+    "out/**",
+    "build/**",
+    "next-env.d.ts",
+    "eslint-rules/**",
+    "lib/api/generated/**",
+  ]),
   {
     plugins: {
       "unused-imports": unusedImports,
@@ -35,6 +42,12 @@ const eslintConfig = defineConfig([
       // Critical for multi-network deployments. See
       // eslint-rules/enforce-network-query-key.js for rationale.
       "firn-local/enforce-network-query-key": "error",
+
+      // ───── mobile responsiveness ───────────────────────────────────
+      // Warn on bare desktop horizontal padding (px-10+) without a
+      // smaller-breakpoint counterpart. See
+      // eslint-rules/responsive-horizontal-padding.js for the heuristic.
+      "firn-local/responsive-horizontal-padding": "warn",
 
       // ───── general best practices ──────────────────────────────────
       "prefer-const": "error",

@@ -60,7 +60,7 @@ export default function TokensIndexPage() {
   }, [rows, q, sort]);
 
   return (
-    <div className="px-10 py-8 pb-12">
+    <div className="px-4 sm:px-6 lg:px-10 py-6 sm:py-8 pb-12">
       <div className="eyebrow mb-2.5">◆ Tokens</div>
       <div className="h-display" style={{ fontSize: 56, marginBottom: 6 }}>
         {isPending ? <Skeleton className="h-[56px] w-[140px]" /> : formatNumber(rows.length)}

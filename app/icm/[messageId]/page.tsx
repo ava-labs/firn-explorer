@@ -35,7 +35,7 @@ import type {
   ICMMessage,
   TeleporterFeeInfoDecoded,
   TeleporterMessageDecoded,
-} from "@/lib/api/types";
+} from "@/lib/api/queries";
 import { formatNumber, formatRelativeTime } from "@/lib/format";
 import { avaxNetworkName, shortHex } from "@/lib/icm/decode";
 
@@ -72,14 +72,14 @@ export default function ICMMessageDetailPage({ params }: PageProps) {
 
   if (!messageId) {
     return (
-      <div className="px-10 py-12">
+      <div className="px-4 sm:px-6 lg:px-10 py-8 sm:py-12">
         <NotFound title="Invalid message ID" detail="Expected a 32-byte (0x…) hex string." />
       </div>
     );
   }
 
   return (
-    <div className="px-10 py-8 pb-12">
+    <div className="px-4 sm:px-6 lg:px-10 py-6 sm:py-8 pb-12">
       <div className="eyebrow mb-2.5">
         <Link href="/icm" style={{ color: "inherit", textDecoration: "none" }}>
           ◆ ICM
@@ -650,10 +650,10 @@ function TeleporterMessageFields({ message }: { message: TeleporterMessageDecode
         />
       </FieldRow>
       <FieldRow label="Required gas limit">{message.requiredGasLimit}</FieldRow>
-      {message.allowedRelayerAddresses.length > 0 ? (
+      {(message.allowedRelayerAddresses ?? []).length > 0 ? (
         <FieldRow label="Allowed relayers">
           <div className="flex flex-wrap gap-2">
-            {message.allowedRelayerAddresses.map((a) => (
+            {(message.allowedRelayerAddresses ?? []).map((a) => (
               <Hash key={a} value={a} length={0} tone="plain" href={`/address/${a}`} />
             ))}
           </div>
@@ -663,10 +663,10 @@ function TeleporterMessageFields({ message }: { message: TeleporterMessageDecode
           <span style={{ color: "var(--ink-4)" }}>any</span>
         </FieldRow>
       )}
-      {message.receipts.length > 0 ? (
-        <FieldRow label={`Inline receipts (${message.receipts.length})`}>
+      {(message.receipts ?? []).length > 0 ? (
+        <FieldRow label={`Inline receipts (${(message.receipts ?? []).length})`}>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            {message.receipts.map((r, i) => (
+            {(message.receipts ?? []).map((r, i) => (
               <span
                 key={i}
                 className="mono"

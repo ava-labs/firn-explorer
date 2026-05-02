@@ -83,8 +83,18 @@ export function FilterInput({
       aria-label={ariaLabel ?? placeholder}
       className="bg-bg-elev border outline-none"
       style={{
+        // `width` is the desktop intent. Cap it to 100% of the wrapping
+        // FilterBar so a 300px filter doesn't push the row past the
+        // viewport edge on a phone — the FilterBar already uses
+        // flex-wrap, this just keeps the individual cell from exceeding
+        // its row.
         width,
+        maxWidth: "100%",
+        // Floor the input height so it never falls below the iOS
+        // tap-target minimum on phones (the default `height: 30` is the
+        // desktop dense form height).
         height: 30,
+        minHeight: 30,
         padding: "0 12px",
         borderRadius: 999,
         borderColor: "var(--line)",
