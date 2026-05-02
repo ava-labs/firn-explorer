@@ -13,19 +13,12 @@ function GitHubMark({ size = 14 }: { size?: number }) {
 export function Footer() {
   return (
     <footer
-      className="border-t border-line"
+      className="border-t border-line mt-12 px-4 sm:px-7 py-5 text-ink-3 flex flex-col sm:grid sm:grid-cols-[1fr_auto_1fr] gap-3 sm:gap-4 items-center text-center sm:text-left"
       style={{
-        marginTop: 48,
-        padding: "20px 28px",
         fontSize: 12.5,
-        color: "var(--ink-3)",
-        display: "grid",
-        gridTemplateColumns: "1fr auto 1fr",
-        alignItems: "center",
-        gap: 16,
       }}
     >
-      <span style={{ justifySelf: "start" }}>
+      <span className="sm:justify-self-start">
         Crafted with{" "}
         <span aria-label="love" role="img" style={{ color: "var(--accent)" }}>
           ❤️
@@ -36,15 +29,12 @@ export function Footer() {
         href="https://github.com/ava-labs/firn"
         target="_blank"
         rel="noreferrer"
+        className="sm:justify-self-center inline-flex items-center gap-1.5"
         style={{
-          justifySelf: "center",
           color: "var(--ink-2)",
           textDecoration: "none",
           fontFamily: "var(--font-mono)",
           fontSize: 12,
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 6,
         }}
       >
         <span style={{ color: "var(--ink-4)" }}>Powered by</span>
@@ -55,8 +45,8 @@ export function Footer() {
         href="https://build.avax.network"
         target="_blank"
         rel="noreferrer"
+        className="sm:justify-self-end"
         style={{
-          justifySelf: "end",
           color: "var(--ink-2)",
           textDecoration: "none",
           fontFamily: "var(--font-mono)",

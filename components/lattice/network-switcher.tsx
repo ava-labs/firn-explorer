@@ -76,8 +76,16 @@ export function NetworkSwitcher() {
           style={{
             position: "absolute",
             top: "calc(100% + 6px)",
+            // Anchor to the trigger's right edge so the panel never sails
+            // past the viewport on the desktop topbar; on phones the
+            // switcher lives inside the drawer (which already has page
+            // padding), so the same `right: 0` keeps it inside the column.
             right: 0,
             minWidth: 220,
+            // Cap the panel to the viewport width minus a comfortable
+            // gutter so a stray long firn URL can't push it off-screen on
+            // a narrow phone.
+            maxWidth: "calc(100vw - 32px)",
             background: "var(--bg-elev)",
             border: "1px solid var(--line)",
             borderRadius: 10,
