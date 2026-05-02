@@ -4,13 +4,13 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { apiGet } from "@/lib/api/client";
-import type { Block, Transaction } from "@/lib/api/types";
+import { getBlock, getTransaction } from "@/lib/api/generated/firn";
+import { firnQueryKey } from "@/lib/api/generated-query-key";
+import type { Block, Transaction } from "@/lib/api/queries";
 import { Hash } from "@/components/lattice/hash";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatNativeAmount, formatNumber, formatRelativeTime } from "@/lib/format";
 import { useChain } from "@/lib/api/queries";
-import { useNetwork } from "@/lib/api/network";
 
 // ---------------------------------------------------------------------------
 // Pattern detection — pure, no firn calls. Drives the dispatch fan-out below.
@@ -37,17 +37,19 @@ function classify(input: string): Pattern {
 // firn's GET /v1/search?q= is spec'd but unimplemented; we fan out instead.
 // ---------------------------------------------------------------------------
 function useBlockMatch(p: Pattern) {
-  const net = useNetwork().config.url ?? "";
   const candidate: string | number | null = p.isHash32
     ? p.raw
     : p.blockNumber != null
       ? p.blockNumber
       : null;
   return useQuery<Block | null>({
-    queryKey: ["search", "block", net, candidate] as const,
+    queryKey: firnQueryKey(
+      { id: candidate },
+      { url: candidate != null ? `/v1/blocks/${candidate}` : "/v1/blocks/_" },
+    ),
     queryFn: async () => {
       try {
-        return await apiGet<Block>(`/blocks/${candidate}`);
+        return (await getBlock(String(candidate))) as unknown as Block;
       } catch {
         return null;
       }
@@ -59,12 +61,11 @@ function useBlockMatch(p: Pattern) {
 }
 
 function useTxMatch(p: Pattern) {
-  const net = useNetwork().config.url ?? "";
   return useQuery<Transaction | null>({
-    queryKey: ["search", "tx", net, p.raw] as const,
+    queryKey: firnQueryKey({ hash: p.raw }, { url: `/v1/transactions/${p.raw}` }),
     queryFn: async () => {
       try {
-        return await apiGet<Transaction>(`/transactions/${p.raw}`);
+        return (await getTransaction(p.raw)) as unknown as Transaction;
       } catch {
         return null;
       }
@@ -134,7 +135,7 @@ function SearchPageInner() {
   const recognized = pattern.isHash32 || pattern.isAddress || pattern.blockNumber != null;
 
   return (
-    <div className="px-10 py-8 pb-12">
+    <div className="px-4 sm:px-6 lg:px-10 py-6 sm:py-8 pb-12">
       <div className="mx-auto" style={{ maxWidth: 720 }}>
         <div className="eyebrow" style={{ marginBottom: 10 }}>
           ◆ Search results

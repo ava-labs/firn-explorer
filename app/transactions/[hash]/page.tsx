@@ -3,7 +3,7 @@
 import { use, useState } from "react";
 import Link from "next/link";
 import { useChain, useTransaction } from "@/lib/api/queries";
-import type { Log, Trace, Transaction } from "@/lib/api/types";
+import type { Log, Trace, Transaction } from "@/lib/api/queries";
 import { Hash } from "@/components/lattice/hash";
 import { Chip } from "@/components/lattice/chip";
 import { MethodChip } from "@/components/lattice/method-chip";
@@ -43,7 +43,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ ha
   }
 
   return (
-    <div className="px-10 py-8 pb-12 max-w-[1080px] mx-auto">
+    <div className="px-4 sm:px-6 lg:px-10 py-6 sm:py-8 pb-12 max-w-[1080px] mx-auto">
       <div className="eyebrow mb-2.5">◆ Transaction</div>
 
       {/* Headline */}
@@ -331,8 +331,8 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ ha
 
 function LogCard({ log }: { log: Log }) {
   const [open, setOpen] = useState(false);
-  const eventSig = log.topics[0] ?? "";
-  const indexed = log.topics.slice(1);
+  const eventSig = (log.topics ?? [])[0] ?? "";
+  const indexed = (log.topics ?? []).slice(1);
 
   return (
     <div
@@ -449,7 +449,7 @@ function LogCard({ log }: { log: Log }) {
 }
 
 function TraceLine({ trace }: { trace: Trace }) {
-  const depth = trace.traceAddress.length;
+  const depth = (trace.traceAddress ?? []).length;
   return (
     <div style={{ paddingLeft: depth * 24 }}>
       {depth > 0 ? <span style={{ color: "var(--ink-4)" }}>↳ </span> : null}

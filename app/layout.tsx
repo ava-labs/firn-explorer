@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter, Inter_Tight, JetBrains_Mono } from "next/font/google";
 import Script from "next/script";
 import { Providers } from "./providers";
@@ -27,6 +27,22 @@ const jetbrains = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "Avalanche Explorer",
   description: "Block explorer for Avalanche L1s",
+};
+
+// Mobile viewport contract — `viewportFit: "cover"` extends the layout
+// under iOS notch / home indicator, which is then padded back in via
+// `env(safe-area-inset-*)` on the body in globals.css. The themeColor
+// `media` array form lets the OS browser chrome track the active theme
+// (cream in light, near-black in dark) instead of showing a default
+// safari-grey stripe at the top.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#fafaf7" },
+    { media: "(prefers-color-scheme: dark)", color: "#0c0c0a" },
+  ],
 };
 
 const themeBootstrap = `

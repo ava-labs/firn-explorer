@@ -36,7 +36,7 @@ export function NotFoundDetail({
 }) {
   const notFound = /not[_ ]?found/i.test(error.message);
   return (
-    <div className="px-10 py-8 pb-12 max-w-[1080px] mx-auto">
+    <div className="px-4 sm:px-6 lg:px-10 py-6 sm:py-8 pb-12 max-w-[1080px] mx-auto">
       <Link
         href={indexHref}
         style={{

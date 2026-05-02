@@ -24,7 +24,12 @@ import {
   truncateHash,
 } from "@/lib/format";
 import Link from "next/link";
-import type { AddressLog, InternalTransaction, TokenTransfer, Transaction } from "@/lib/api/types";
+import type {
+  AddressLog,
+  InternalTransaction,
+  TokenTransfer,
+  Transaction,
+} from "@/lib/api/queries";
 import {
   abiSignature,
   fileLanguage,
@@ -100,7 +105,7 @@ export default function AddressPage({ params }: { params: Promise<{ hash: string
   const contractName = src?.compilation?.name;
 
   return (
-    <div className="px-10 py-8 pb-12">
+    <div className="px-4 sm:px-6 lg:px-10 py-6 sm:py-8 pb-12">
       <div className="eyebrow mb-2.5">
         ◆{" "}
         {contractName
@@ -138,11 +143,11 @@ export default function AddressPage({ params }: { params: Promise<{ hash: string
       </div>
 
       {/* Header strip — balance + tx count from /v1/addresses/:hash + */}
-      {/* eth_getBalance via firn's RPC passthrough.                   */}
+      {/* eth_getBalance via firn's RPC passthrough. Stacks at <sm so   */}
+      {/* the balance column doesn't get crushed below ~360px wide.     */}
       <div
-        className="grid mb-9"
+        className="grid grid-cols-1 sm:grid-cols-[1.2fr_1fr_1fr] mb-9"
         style={{
-          gridTemplateColumns: "1.2fr 1fr 1fr",
           borderTop: "1px solid var(--line)",
           borderBottom: "1px solid var(--line)",
         }}
@@ -498,7 +503,7 @@ function AddressLogsTab({ address }: { address: string }) {
           {truncateHash(lg.txHash)}
         </Link>,
         <span key="s" className="mono" style={{ fontSize: 11.5 }}>
-          {lg.topics[0] ? truncateHash(lg.topics[0], 10, 6) : "—"}
+          {(lg.topics ?? [])[0] ? truncateHash((lg.topics ?? [])[0], 10, 6) : "—"}
         </span>,
         <Link
           key="b"

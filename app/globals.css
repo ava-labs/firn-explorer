@@ -131,6 +131,31 @@
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
+    /* Failsafe against any single descendant pushing the page wider than the
+       viewport on mobile (long hashes, oversized SVG illustrations, etc.).
+       Individual scroll containers should still opt back in to overflow-x:
+       auto where horizontal scrolling is intentional (code blocks, tables). */
+    overflow-x: hidden;
+    /* Honor iOS notch + home indicator. `viewport-fit=cover` (set in
+       app/layout.tsx) extends content edge-to-edge; we add the insets back
+       here so the topbar/footer don't render under hardware chrome. The
+       max() with 0px keeps non-iOS browsers from receiving negative or
+       NaN values. */
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  /* Suppress iOS auto-zoom on focus for any text-entry control. iOS zooms
+     in whenever a focused input has computed font-size < 16px. We only
+     apply at narrow viewports so desktop dense forms keep their tighter
+     12–13px sizing. */
+  @media (max-width: 640px) {
+    input,
+    select,
+    textarea {
+      font-size: 16px;
+    }
   }
 }
 

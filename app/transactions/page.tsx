@@ -87,7 +87,7 @@ export default function TransactionsPage() {
   }
 
   return (
-    <div className="px-10 py-8 pb-12">
+    <div className="px-4 sm:px-6 lg:px-10 py-6 sm:py-8 pb-12">
       <div className="eyebrow mb-2.5">◆ Transactions</div>
       <div className="flex items-baseline gap-3 mb-2">
         <span className="h-display" style={{ fontSize: 56 }}>
