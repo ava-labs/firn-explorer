@@ -420,4 +420,249 @@ export const CATALOG: Group[] = [
       },
     ],
   },
+  {
+    // Group label is overridden at render time by the live /v1/_meta/routes
+    // response — these entries exist purely to decorate the matching
+    // routes with rich playground inputs (titles, descriptions,
+    // example bodies). Placement here in CATALOG is irrelevant.
+    id: "decorations",
+    label: "Decorations",
+    endpoints: [
+      // ─── Signature aggregation ─────────────────────────────────────
+      {
+        id: "sigagg.aggregate",
+        method: "POST",
+        path: "/v1/signature-aggregator/aggregate-signatures",
+        title: "Aggregate Warp signatures",
+        description:
+          "Request a BLS-aggregated signature for an unsigned Warp message from the validator set. `message` is required; `justification` covers the path Avalanche uses for non-Teleporter system messages and is usually empty for Teleporter flows. `signingSubnetID` defaults to the chain's home subnet — set it for L1→L1 messaging where the signing set isn't the default. Requires firn started with `--signature-aggregator`.",
+        exampleBody: JSON.stringify(
+          {
+            message: "0x0000…",
+            justification: "",
+            signingSubnetID: "",
+            quorumPercentage: 67,
+            pChainHeight: 0,
+          },
+          null,
+          2,
+        ),
+      },
+      {
+        id: "sigagg.aggregate.alias",
+        method: "POST",
+        path: "/aggregate-signatures",
+        title: "Aggregate Warp signatures (compat alias)",
+        description:
+          "Identical to /v1/signature-aggregator/aggregate-signatures — kept for compatibility with the upstream icm-services routing convention.",
+        exampleBody: JSON.stringify(
+          {
+            message: "0x0000…",
+            justification: "",
+            signingSubnetID: "",
+            quorumPercentage: 67,
+            pChainHeight: 0,
+          },
+          null,
+          2,
+        ),
+      },
+      {
+        id: "sigagg.health",
+        method: "GET",
+        path: "/v1/signature-aggregator/health",
+        title: "Sig-agg health probe",
+        description:
+          "200 = aggregator is connected to the network and ready. 404 = firn was started without `--signature-aggregator`.",
+      },
+
+      // ─── Compliance ────────────────────────────────────────────────
+      {
+        id: "compliance.screen.get",
+        method: "GET",
+        path: "/v1/compliance/screen",
+        title: "Screen one address",
+        description:
+          "Single-address sanctions/compliance check. Returns blocked: bool plus the matched list entry when blocked.",
+        queryParams: [
+          {
+            name: "address",
+            type: "address",
+            required: true,
+            example: "0x0000000000000000000000000000000000000000",
+          },
+        ],
+      },
+      {
+        id: "compliance.screen.post",
+        method: "POST",
+        path: "/v1/compliance/screen",
+        title: "Screen many addresses",
+        description:
+          "Bulk sanctions/compliance check. Returns one ScreenResult per input address, in input order.",
+        exampleBody: JSON.stringify(
+          {
+            addresses: [
+              "0x0000000000000000000000000000000000000000",
+              "0xa39abb978cfd2ba459163ad1eab6e8940fbf4359",
+            ],
+          },
+          null,
+          2,
+        ),
+      },
+      {
+        id: "compliance.status",
+        method: "GET",
+        path: "/v1/compliance/status",
+        title: "Compliance subsystem status",
+        description:
+          "Reports whether the blocklist source is configured, list freshness, and a row count. Returns 503 with code `compliance_disabled` when firn was started without `--blocklist`.",
+      },
+
+      // ─── viem-flavoured JSON-RPC ───────────────────────────────────
+      {
+        id: "rpc.viem",
+        method: "POST",
+        path: "/v1/viem/rpc",
+        title: "Viem-compatible JSON-RPC",
+        description:
+          "Drop-in replacement endpoint that answers eth_* calls from chdb. eth_getLogs becomes an indexed scan (millis) instead of a bloom walk. Same wire shape as /v1/rpc — point viem/ethers/web3 at this URL and `getLogs` flies.",
+        exampleBody: JSON.stringify(
+          {
+            jsonrpc: "2.0",
+            id: 1,
+            method: "eth_getLogs",
+            params: [{ fromBlock: "0x0", toBlock: "latest" }],
+          },
+          null,
+          2,
+        ),
+      },
+
+      // ─── P-Chain ───────────────────────────────────────────────────
+      {
+        id: "pchain.blocks",
+        method: "GET",
+        path: "/v1/pchain/blocks",
+        title: "P-Chain blocks",
+        description: "Paginated P-Chain block list, newest first.",
+        queryParams: PAGINATION,
+      },
+      {
+        id: "pchain.block",
+        method: "GET",
+        path: "/v1/pchain/blocks/{height}",
+        title: "P-Chain block by height",
+        description: "Single P-Chain block by decimal height.",
+        pathParams: [{ name: "height", type: "integer", required: true, example: "1234567" }],
+      },
+      {
+        id: "pchain.tx",
+        method: "GET",
+        path: "/v1/pchain/txs/{txId}",
+        title: "P-Chain transaction by ID",
+        description: "P-Chain transaction by ID — accepts CB58 or 0x-hex bytes32.",
+        pathParams: [{ name: "txId", type: "id", required: true }],
+      },
+      {
+        id: "pchain.validators",
+        method: "GET",
+        path: "/v1/pchain/validators",
+        title: "L1 validators (P-Chain view)",
+        description:
+          "L1 validator set as cached from P-Chain — paired with /v1/validators for the EVM-side view.",
+        queryParams: PAGINATION,
+      },
+      {
+        id: "pchain.validator",
+        method: "GET",
+        path: "/v1/pchain/validators/{validationId}",
+        title: "L1 validator by validationId",
+        description: "Single L1 validator entry. validationId is a 32-byte CB58 ID.",
+        pathParams: [{ name: "validationId", type: "id", required: true }],
+      },
+
+      // ─── Balances ──────────────────────────────────────────────────
+      {
+        id: "balances.native",
+        method: "GET",
+        path: "/v1/balances/native",
+        title: "Native balance at block",
+        description: "Native AVAX/L1-token balance of an address at a given block height.",
+        queryParams: [
+          {
+            name: "address",
+            type: "address",
+            required: true,
+            suggest: "ownAddress",
+          },
+          {
+            name: "block",
+            type: "integer",
+            description: "Block number; defaults to latest.",
+          },
+        ],
+      },
+      {
+        id: "balances.history",
+        method: "GET",
+        path: "/v1/balances/native/history",
+        title: "Native balance history",
+        description:
+          "Time-series of an address's native balance across the chain. Useful for portfolio-style charts.",
+        queryParams: [
+          {
+            name: "address",
+            type: "address",
+            required: true,
+            suggest: "ownAddress",
+          },
+        ],
+      },
+
+      // ─── Explorer composition layer ────────────────────────────────
+      {
+        id: "explorer.bootstrap",
+        method: "GET",
+        path: "/v1/explorer/bootstrap",
+        title: "Explorer bootstrap (cold paint payload)",
+        description:
+          "Single-call composition of chain + stats + recent blocks/txs/ICM + pre-computed TPS series. The home page first paint.",
+      },
+      {
+        id: "explorer.feed",
+        method: "GET",
+        path: "/v1/explorer/feed",
+        title: "Explorer SSE feed",
+        description:
+          "Server-Sent Events stream of incremental updates — companion to /v1/explorer/bootstrap. Frame format documented in firn/docs/API_SPEC.md. Not runnable from this playground.",
+      },
+
+      // ─── Meta ──────────────────────────────────────────────────────
+      {
+        id: "meta.routes",
+        method: "GET",
+        path: "/v1/_meta/routes",
+        title: "Route catalog (this page's source)",
+        description:
+          "Returns every HTTP route firn exposes plus a one-line description. This API page renders straight from this endpoint — that's why new firn routes appear here automatically.",
+      },
+      {
+        id: "meta.healthz",
+        method: "GET",
+        path: "/healthz",
+        title: "Liveness probe",
+        description: 'Returns {"status":"ok"}. No-frills uptime check.',
+      },
+      {
+        id: "meta.metrics",
+        method: "GET",
+        path: "/metrics",
+        title: "Prometheus metrics",
+        description:
+          "Prometheus exposition format with firn's request, store, and ingest counters. Self-documenting via curl.",
+      },
+    ],
+  },
 ];
