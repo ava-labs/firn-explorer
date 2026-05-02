@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import { Inter, Inter_Tight, JetBrains_Mono } from "next/font/google";
+import Script from "next/script";
 import { Providers } from "./providers";
 import { Topbar } from "@/components/lattice/topbar";
+import { Footer } from "@/components/lattice/footer";
 import "./globals.css";
 
 const interTight = Inter_Tight({
@@ -47,16 +49,26 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${interTight.variable} ${inter.variable} ${jetbrains.variable} h-full antialiased`}
+      className={`${interTight.variable} ${inter.variable} ${jetbrains.variable} antialiased`}
       suppressHydrationWarning
     >
-      <head>
-        <script dangerouslySetInnerHTML={{ __html: themeBootstrap }} />
-      </head>
-      <body className="min-h-full flex flex-col bg-bg text-ink">
+      {/* Body is the natural scroll container — Topbar uses position: sticky
+          to pin to the top of the viewport, which only works when the
+          ancestor scroll context is the document itself. */}
+      <body className="bg-bg text-ink">
+        {/* Theme bootstrap runs before hydration so dark mode applies on
+            first paint with no flash. next/script's beforeInteractive
+            strategy is the Next 16-blessed way to inline a <script>
+            without tripping the "scripts inside React components" guard. */}
+        <Script
+          id="theme-bootstrap"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{ __html: themeBootstrap }}
+        />
         <Providers>
           <Topbar />
-          <main className="flex-1 overflow-auto">{children}</main>
+          <main>{children}</main>
+          <Footer />
         </Providers>
       </body>
     </html>

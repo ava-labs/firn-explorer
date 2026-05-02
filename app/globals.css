@@ -10,26 +10,26 @@
  *  oklch accent red, JetBrains Mono for hashes, Inter Tight for display.
  * ------------------------------------------------------------------ */
 :root {
-  --bg: #FAFAF7;
-  --bg-elev: #FFFFFF;
-  --bg-sunken: #F2F1ED;
-  --bg-tint: #F6F5F0;
-  --ink: #0E0E0C;
-  --ink-2: #2A2A26;
-  --ink-3: #5C5C56;
-  --ink-4: #8C8C85;
-  --ink-5: #B5B5AE;
-  --line: #E6E5DF;
-  --line-soft: #EFEEE9;
-  --accent: oklch(0.58 0.20 25);
-  --accent-ink: oklch(0.50 0.22 25);
+  --bg: #fafaf7;
+  --bg-elev: #ffffff;
+  --bg-sunken: #f2f1ed;
+  --bg-tint: #f6f5f0;
+  --ink: #0e0e0c;
+  --ink-2: #2a2a26;
+  --ink-3: #5c5c56;
+  --ink-4: #8c8c85;
+  --ink-5: #b5b5ae;
+  --line: #e6e5df;
+  --line-soft: #efeee9;
+  --accent: oklch(0.58 0.2 25);
+  --accent-ink: oklch(0.5 0.22 25);
   --accent-soft: oklch(0.94 0.04 25);
   --steel: oklch(0.62 0.04 240);
   --steel-soft: oklch(0.95 0.015 240);
   --good: oklch(0.62 0.13 145);
   --good-soft: oklch(0.95 0.04 145);
   --warn: oklch(0.74 0.14 75);
-  --bad: oklch(0.58 0.20 25);
+  --bad: oklch(0.58 0.2 25);
 
   /* shadcn vars remapped onto Lattice tokens so existing primitives inherit */
   --background: var(--bg);
@@ -53,25 +53,25 @@
 }
 
 [data-theme="dark"] {
-  --bg: #0C0C0A;
+  --bg: #0c0c0a;
   --bg-elev: #141413;
-  --bg-sunken: #1A1A18;
+  --bg-sunken: #1a1a18;
   --bg-tint: #16161400;
-  --ink: #F4F3EE;
-  --ink-2: #DCDBD5;
-  --ink-3: #9C9B95;
-  --ink-4: #6E6D67;
+  --ink: #f4f3ee;
+  --ink-2: #dcdbd5;
+  --ink-3: #9c9b95;
+  --ink-4: #6e6d67;
   --ink-5: #424139;
-  --line: #1F1F1C;
-  --line-soft: #1F1F1C;
-  --accent: oklch(0.68 0.20 25);
-  --accent-ink: oklch(0.74 0.20 25);
-  --accent-soft: oklch(0.28 0.10 25);
+  --line: #1f1f1c;
+  --line-soft: #1f1f1c;
+  --accent: oklch(0.68 0.2 25);
+  --accent-ink: oklch(0.74 0.2 25);
+  --accent-soft: oklch(0.28 0.1 25);
   --steel: oklch(0.72 0.04 240);
   --steel-soft: oklch(0.22 0.03 240);
   --good: oklch(0.74 0.16 145);
   --good-soft: oklch(0.24 0.06 145);
-  --warn: oklch(0.80 0.14 75);
+  --warn: oklch(0.8 0.14 75);
 }
 
 /* Tailwind utility surface for our tokens.
@@ -198,7 +198,7 @@
     color: oklch(0.84 0.18 145);
   }
   [data-theme="dark"] .chip.bad {
-    color: oklch(0.84 0.20 25);
+    color: oklch(0.84 0.2 25);
   }
   [data-theme="dark"] .chip.steel {
     color: oklch(0.84 0.04 240);
@@ -247,6 +247,19 @@
     text-decoration: underline;
   }
 
+  /* Used by the Hash component when a non-`link` tone is given an href.
+     Inherits the parent span's tone color (so dim/from/to/plain stay on
+     palette) and brightens to ink on hover so clickability still reads. */
+  .hash-anchor {
+    color: inherit;
+    text-decoration: none;
+    transition: color 120ms ease;
+  }
+  .hash-anchor:hover {
+    color: var(--ink);
+    text-decoration: underline;
+  }
+
   .live-dot {
     display: inline-block;
     width: 7px;
@@ -256,13 +269,103 @@
     animation: pulse-ring 1.6s ease-out infinite;
   }
 
-  .fresh-row {
-    animation: slide-in 0.35s ease;
-    background: var(--accent-soft);
-    transition: background 0.8s ease 0.2s;
+  .page-fade {
+    /* Subtle entrance for the active route's content. Runs on initial load
+       and on every client navigation — Next 16 templates auto-key per
+       segment, so this wrapper remounts and the animation re-fires.
+       Short and gentle — felt, not announced. */
+    animation: page-enter 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    will-change: opacity, transform;
   }
-  .fresh-row.fade {
+  /* Light stagger so cards/sections settle in just after the page itself,
+     giving the "all components fade in" feel without per-component wiring.
+     Targets only direct content children of the page wrapper. */
+  .page-fade > * {
+    animation: page-enter 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation-delay: 40ms;
+  }
+  .page-fade > * + * {
+    animation-delay: 80ms;
+  }
+  .page-fade > * + * + * {
+    animation-delay: 120ms;
+  }
+  .page-fade > * + * + * + * {
+    animation-delay: 160ms;
+  }
+
+  .fresh-row {
+    /* Smooth, non-announcing arrival. A subtle luminance lift (a tiny
+       fraction of the foreground ink, neutral in both light and dark) and a
+       gentle vertical settle — felt in peripheral vision when scanning, not
+       flashed. No accent color, no leading-edge bar. The animation ends at
+       the row's natural state so removing the class is invisible. */
+    animation: row-arrive 1.6s cubic-bezier(0.22, 1, 0.36, 1);
+    will-change: background-color, transform, opacity;
+  }
+
+  .lat-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .lat-tab {
+    font-size: 13px;
+    padding: 10px 16px;
+    color: var(--ink-3);
+    cursor: pointer;
+    border-bottom: 1.5px solid transparent;
+    margin-bottom: -1px;
+    display: inline-flex;
+    gap: 8px;
+    align-items: center;
     background: transparent;
+    border-left: 0;
+    border-right: 0;
+    border-top: 0;
+  }
+  .lat-tab .count {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: 11px;
+    color: var(--ink-4);
+    background: var(--bg-sunken);
+    padding: 1px 6px;
+    border-radius: 999px;
+  }
+  .lat-tab:hover {
+    color: var(--ink-2);
+  }
+  .lat-tab.active {
+    color: var(--ink);
+    border-bottom-color: var(--ink);
+  }
+
+  .lat-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    border: 1px solid var(--line);
+    background: var(--bg-elev);
+    color: var(--ink-2);
+    cursor: pointer;
+  }
+  .lat-btn:hover {
+    color: var(--ink);
+    border-color: var(--ink-4);
+  }
+  .lat-btn.primary {
+    background: var(--ink);
+    color: var(--bg);
+    border-color: var(--ink);
+  }
+  .lat-btn.ghost {
+    background: transparent;
+    border-color: transparent;
+    color: var(--ink-3);
   }
 }
 
@@ -283,5 +386,44 @@
   to {
     transform: translateY(0);
     opacity: 1;
+  }
+}
+
+@keyframes row-arrive {
+  /* Highlight derived from --ink so it reads as "brightness lift" in both
+     themes without referencing the accent. ~7% mix is the sweet spot:
+     visible mid-flight, invisible at start/end. */
+  0% {
+    background-color: color-mix(in srgb, var(--ink) 7%, transparent);
+    transform: translateY(-2px);
+    opacity: 0.6;
+  }
+  18% {
+    background-color: color-mix(in srgb, var(--ink) 7%, transparent);
+    transform: translateY(0);
+    opacity: 1;
+  }
+  100% {
+    background-color: transparent;
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fresh-row,
+  .page-fade {
+    animation: none;
   }
 }

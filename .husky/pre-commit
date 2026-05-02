@@ -1,0 +1,12 @@
+# pre-commit: run lint-staged on the staged file set, then a fast
+# typecheck pass on the whole repo. lint-staged handles auto-fixable
+# violations (eslint --fix, prettier --write). The typecheck catches
+# cross-file regressions a per-file lint won't see — TypeScript needs
+# to walk the import graph to validate types.
+#
+# This runs in <10s on a typical edit. If it ever drifts past 30s,
+# move the typecheck to a pre-push hook and keep pre-commit
+# lint-staged-only.
+
+pnpm lint-staged
+pnpm typecheck

@@ -1,20 +1,88 @@
 "use client";
 
+import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useTransactions, useChain } from "@/lib/api/queries";
 import { Hash } from "@/components/lattice/hash";
 import { Chip } from "@/components/lattice/chip";
+import { MethodChip } from "@/components/lattice/method-chip";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PauseButton } from "@/components/lattice/pause-button";
+import { FilterBar, FilterInput, FilterPillGroup } from "@/components/lattice/filter-bar";
 import {
-  formatNativeAmount,
-  formatNumber,
-  formatRelativeTime,
-} from "@/lib/format";
+  SortableTh,
+  applyDir,
+  compareBig,
+  compareDate,
+  type SortState,
+} from "@/components/lattice/sortable-th";
+import { useFreshHashes, useNowTick } from "@/lib/use-fresh";
+import { formatNativeAmount, formatNumber, formatRelativeTime } from "@/lib/format";
+
+type SortKey = "status" | "value" | "block";
+type StatusFilter = "all" | "success" | "failed";
+
+const STATUS_OPTIONS = [
+  { value: "all" as const, label: "All" },
+  { value: "success" as const, label: "Success" },
+  { value: "failed" as const, label: "Failed" },
+];
 
 export default function TransactionsPage() {
-  const { data: page, isPending, error } = useTransactions({ limit: 50 });
+  const router = useRouter();
+  const [address, setAddress] = useState("");
+  const [method, setMethod] = useState("");
+  const [status, setStatus] = useState<StatusFilter>("all");
+  const [sort, setSort] = useState<SortState<SortKey> | null>(null);
+
+  const addressParam = address.trim().toLowerCase() || undefined;
+  const methodParam = method.trim().toLowerCase() || undefined;
+  const statusParam: "success" | "failed" | undefined =
+    status === "success" ? "success" : status === "failed" ? "failed" : undefined;
+
+  const {
+    data: page,
+    isPending,
+    error,
+  } = useTransactions({
+    limit: 50,
+    address: addressParam,
+    method: methodParam,
+    status: statusParam,
+  });
   const { data: chain } = useChain();
   const txs = page?.data;
+  const freshTxs = useFreshHashes(txs);
   const symbol = chain?.nativeToken.symbol ?? "—";
+  useNowTick(1000);
+
+  const view = useMemo(() => {
+    if (!txs) return txs;
+    if (!sort) return txs;
+    return [...txs].sort(
+      applyDir((a, b) => {
+        switch (sort.key) {
+          case "status":
+            return a.status.localeCompare(b.status);
+          case "value":
+            return compareBig(a.value, b.value);
+          case "block": {
+            const cmp = a.block.number - b.block.number;
+            if (cmp !== 0) return cmp;
+            return compareDate(a.block.timestamp, b.block.timestamp);
+          }
+        }
+      }, sort.dir),
+    );
+  }, [txs, sort]);
+
+  const filtersActive = address.trim().length > 0 || method.trim().length > 0 || status !== "all";
+
+  function reset() {
+    setAddress("");
+    setMethod("");
+    setStatus("all");
+  }
 
   return (
     <div className="px-10 py-8 pb-12">
@@ -23,12 +91,37 @@ export default function TransactionsPage() {
         <span className="h-display" style={{ fontSize: 56 }}>
           Latest transactions
         </span>
-        <span className="live-dot" />
-        <span style={{ fontSize: 12, color: "var(--ink-3)" }}>live</span>
+        <PauseButton feed="transactions" />
       </div>
-      <div className="mb-9" style={{ fontSize: 14, color: "var(--ink-3)" }}>
+      <div className="mb-7" style={{ fontSize: 14, color: "var(--ink-3)" }}>
         Updated via WebSocket whenever a new transaction lands on chain.
       </div>
+
+      <FilterBar
+        active={filtersActive}
+        onReset={reset}
+        count={view ? `${formatNumber(view.length)} txn${view.length === 1 ? "" : "s"}` : null}
+      >
+        <FilterInput
+          value={address}
+          onChange={setAddress}
+          placeholder="Address 0x… (from or to)"
+          ariaLabel="Filter by address"
+          width={300}
+        />
+        <FilterInput
+          value={method}
+          onChange={setMethod}
+          placeholder="Method 0x12345678"
+          ariaLabel="Filter by 4-byte selector"
+          width={180}
+        />
+        <FilterPillGroup<StatusFilter>
+          value={status}
+          options={STATUS_OPTIONS}
+          onChange={setStatus}
+        />
+      </FilterBar>
 
       {error ? (
         <div
@@ -40,9 +133,7 @@ export default function TransactionsPage() {
             fontSize: 13,
           }}
         >
-          <div style={{ fontWeight: 500, marginBottom: 4 }}>
-            Couldn&apos;t load transactions
-          </div>
+          <div style={{ fontWeight: 500, marginBottom: 4 }}>Couldn&apos;t load transactions</div>
           <div className="mono" style={{ fontSize: 11.5, color: "var(--ink-3)" }}>
             {error.message}
           </div>
@@ -53,13 +144,31 @@ export default function TransactionsPage() {
         <table className="lat-tbl">
           <thead>
             <tr>
-              <th style={{ width: 72 }}>Status</th>
+              <SortableTh<SortKey> k="status" active={sort} onSort={setSort} width={72}>
+                Status
+              </SortableTh>
               <th>Hash</th>
               <th style={{ width: 110 }}>Method</th>
               <th>From</th>
               <th>To</th>
-              <th style={{ textAlign: "right", width: 140 }}>Value</th>
-              <th style={{ textAlign: "right", width: 130 }}>Block · Age</th>
+              <SortableTh<SortKey>
+                k="value"
+                active={sort}
+                onSort={setSort}
+                align="right"
+                width={140}
+              >
+                Value
+              </SortableTh>
+              <SortableTh<SortKey>
+                k="block"
+                active={sort}
+                onSort={setSort}
+                align="right"
+                width={130}
+              >
+                Block · Age
+              </SortableTh>
             </tr>
           </thead>
           <tbody>
@@ -71,54 +180,43 @@ export default function TransactionsPage() {
                   </td>
                 </tr>
               ))
-            ) : txs?.length ? (
-              txs.map((t) => (
-                <tr key={t.hash}>
+            ) : view?.length ? (
+              view.map((t) => (
+                <tr
+                  key={t.hash}
+                  className={freshTxs.has(t.hash) ? "fresh-row" : undefined}
+                  onClick={() => router.push(`/transactions/${t.hash}`)}
+                  style={{ cursor: "pointer" }}
+                  role="link"
+                  aria-label={`Transaction ${t.hash}`}
+                >
                   <td>
                     <Chip tone={t.status === "success" ? "good" : "bad"}>
                       {t.status === "success" ? "✓ ok" : t.status}
                     </Chip>
                   </td>
                   <td>
-                    <Hash value={t.hash} tone="link" length={12} />
+                    <Hash value={t.hash} tone="link" length={12} href={`/transactions/${t.hash}`} />
                   </td>
                   <td>
-                    {t.method.name ? (
-                      <Chip tone="steel">{t.method.name}</Chip>
-                    ) : (
-                      <span
-                        className="mono"
-                        style={{ fontSize: 11.5, color: "var(--ink-4)" }}
-                      >
-                        {t.method.selector}
-                      </span>
-                    )}
+                    <MethodChip selector={t.method.selector} to={t.to} firnName={t.method.name} />
                   </td>
                   <td>
-                    <Hash value={t.from} tone="dim" length={6} />
+                    <Hash value={t.from} tone="from" length={6} href={`/address/${t.from}`} />
                   </td>
                   <td>
                     {t.to ? (
-                      <Hash value={t.to} tone="dim" length={6} />
+                      <Hash value={t.to} tone="to" length={6} href={`/address/${t.to}`} />
                     ) : (
-                      <span
-                        className="mono"
-                        style={{ fontSize: 11.5, color: "var(--ink-4)" }}
-                      >
+                      <span className="mono" style={{ fontSize: 11.5, color: "var(--ink-4)" }}>
                         create
                       </span>
                     )}
                   </td>
-                  <td
-                    className="mono"
-                    style={{ textAlign: "right", color: "var(--ink)" }}
-                  >
+                  <td className="mono" style={{ textAlign: "right", color: "var(--ink)" }}>
                     {formatNativeAmount(t.value, symbol)}
                   </td>
-                  <td
-                    className="mono"
-                    style={{ textAlign: "right" }}
-                  >
+                  <td className="mono" style={{ textAlign: "right" }}>
                     <div style={{ color: "var(--ink-2)", fontSize: 12 }}>
                       #{formatNumber(t.block.number)}
                     </div>
@@ -130,12 +228,8 @@ export default function TransactionsPage() {
               ))
             ) : (
               <tr>
-                <td
-                  colSpan={7}
-                  className="text-center py-10"
-                  style={{ color: "var(--ink-4)" }}
-                >
-                  No transactions yet.
+                <td colSpan={7} className="text-center py-10" style={{ color: "var(--ink-4)" }}>
+                  {filtersActive ? "No transactions match these filters." : "No transactions yet."}
                 </td>
               </tr>
             )}

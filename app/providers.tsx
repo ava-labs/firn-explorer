@@ -3,7 +3,9 @@
 import { useState, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
-import { RealtimeBridge } from "@/lib/api/realtime";
+import { ExplorerFeedBridge } from "@/lib/api/explorer";
+import { NetworkProvider } from "@/lib/api/network";
+import { LivePauseProvider } from "@/lib/api/live-pause";
 
 function makeQueryClient() {
   return new QueryClient({
@@ -30,9 +32,17 @@ export function Providers({ children }: { children: ReactNode }) {
   const [client] = useState(getQueryClient);
   return (
     <QueryClientProvider client={client}>
-      <RealtimeBridge />
-      {children}
-      <ReactQueryDevtools initialIsOpen={false} buttonPosition="bottom-right" />
+      <NetworkProvider>
+        <LivePauseProvider>
+          {/* Single SSE bridge drives both the home-page bootstrap
+              merge and the per-page list invalidations (/blocks,
+              /transactions, /icm). It honors the per-feed pause flags
+              from <LivePauseProvider> on both paths. */}
+          <ExplorerFeedBridge />
+          {children}
+          <ReactQueryDevtools initialIsOpen={false} buttonPosition="bottom-right" />
+        </LivePauseProvider>
+      </NetworkProvider>
     </QueryClientProvider>
   );
 }
