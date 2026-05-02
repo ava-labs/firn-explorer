@@ -395,16 +395,24 @@ export default function ValidatorsPage() {
         ))}
       </div>
 
-      <div className="card border border-line rounded-[10px] bg-bg-elev">
+      <div className="card border border-line rounded-[10px] bg-bg-elev overflow-x-auto">
         <table className="lat-tbl">
           <thead>
             <tr>
               <th>Node ID</th>
               <th style={{ textAlign: "right", width: 130 }}>{isPrimary ? "Stake" : "Weight"}</th>
-              <th style={{ width: 200 }}>Voting share</th>
-              <th style={{ textAlign: "right", width: 130 }}>Balance</th>
-              <th style={{ textAlign: "right", width: 90 }}>Uptime</th>
-              <th style={{ textAlign: "right", width: 110 }}>Period left</th>
+              <th className="hidden md:table-cell" style={{ width: 200 }}>
+                Voting share
+              </th>
+              <th className="hidden md:table-cell" style={{ textAlign: "right", width: 130 }}>
+                Balance
+              </th>
+              <th className="hidden md:table-cell" style={{ textAlign: "right", width: 90 }}>
+                Uptime
+              </th>
+              <th className="hidden md:table-cell" style={{ textAlign: "right", width: 110 }}>
+                Period left
+              </th>
               <th style={{ textAlign: "right", width: 90 }}>Status</th>
             </tr>
           </thead>
@@ -521,7 +529,7 @@ function ValidatorRow({
       <td className="mono" style={{ textAlign: "right" }}>
         {isPrimary ? formatAvax(v.stakeAmount ?? v.weight, symbol) : formatWeight(v.weight)}
       </td>
-      <td>
+      <td className="hidden md:table-cell">
         <div className="flex items-center gap-2">
           <div
             style={{
@@ -545,7 +553,7 @@ function ValidatorRow({
           </span>
         </div>
       </td>
-      <td className="mono" style={{ textAlign: "right" }}>
+      <td className="mono hidden md:table-cell" style={{ textAlign: "right" }}>
         {isPrimary ? (
           <span style={{ color: "var(--ink-4)" }}>n/a</span>
         ) : !v.validationID ? (
@@ -565,7 +573,7 @@ function ValidatorRow({
           (balanceDisplay ?? <span style={{ color: "var(--ink-4)" }}>—</span>)
         )}
       </td>
-      <td className="mono" style={{ textAlign: "right" }}>
+      <td className="mono hidden md:table-cell" style={{ textAlign: "right" }}>
         {uptime !== undefined && uptime !== "" ? (
           formatUptime(uptime)
         ) : (
@@ -577,7 +585,7 @@ function ValidatorRow({
           </span>
         )}
       </td>
-      <td className="mono" style={{ textAlign: "right" }}>
+      <td className="mono hidden md:table-cell" style={{ textAlign: "right" }}>
         {formatPeriodRemaining(v.endTime)}
       </td>
       <td style={{ textAlign: "right" }}>

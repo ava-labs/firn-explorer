@@ -27,6 +27,7 @@ export function SortableTh<K extends string>({
   onSort,
   align = "left",
   width,
+  className,
   children,
 }: {
   k: K;
@@ -34,6 +35,9 @@ export function SortableTh<K extends string>({
   onSort: (next: SortState<K>) => void;
   align?: "left" | "right";
   width?: number;
+  /** Extra classes — used by listing pages to hide non-essential
+   *  columns at narrow viewports (e.g. `"hidden md:table-cell"`). */
+  className?: string;
   children: ReactNode;
 }) {
   const isActive = active?.key === k;
@@ -60,6 +64,7 @@ export function SortableTh<K extends string>({
     <th
       onClick={handleClick}
       style={baseStyle}
+      className={className}
       aria-sort={dir === "asc" ? "ascending" : dir === "desc" ? "descending" : "none"}
     >
       <span

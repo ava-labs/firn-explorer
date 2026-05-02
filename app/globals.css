@@ -258,6 +258,31 @@
     font-family: var(--font-mono), ui-monospace, monospace;
     font-size: 12.5px;
   }
+  .lat-tbl th,
+  .lat-tbl td {
+    white-space: nowrap;
+  }
+
+  /* Tighten table density on phones — same row layout, less padding,
+   * smaller type. Listing pages wrap their tables in overflow-x-auto,
+   * so a row that's wider than the viewport scrolls within its card
+   * rather than pushing the whole page sideways. */
+  @media (max-width: 640px) {
+    .lat-tbl {
+      font-size: 12px;
+    }
+    .lat-tbl th {
+      padding: 8px 10px;
+      font-size: 10.5px;
+    }
+    .lat-tbl td {
+      padding: 10px 10px;
+    }
+    .lat-tbl td.mono,
+    .lat-tbl th.mono {
+      font-size: 11.5px;
+    }
+  }
 
   .hash-link {
     font-family: var(--font-mono), ui-monospace, monospace;

@@ -96,7 +96,7 @@ export default function TransactionsPage() {
         <PauseButton feed="transactions" />
       </div>
       <div className="mb-7" style={{ fontSize: 14, color: "var(--ink-3)" }}>
-        Updated via WebSocket whenever a new transaction lands on chain.
+        Live updates whenever a new transaction lands on chain.
       </div>
 
       <FilterBar
@@ -127,7 +127,7 @@ export default function TransactionsPage() {
 
       {error ? <ErrorBanner title="Couldn't load transactions" message={error.message} /> : null}
 
-      <div className="card border border-line rounded-[10px] bg-bg-elev">
+      <div className="card border border-line rounded-[10px] bg-bg-elev overflow-x-auto">
         <table className="lat-tbl">
           <thead>
             <tr>
@@ -135,9 +135,11 @@ export default function TransactionsPage() {
                 Status
               </SortableTh>
               <th>Hash</th>
-              <th style={{ width: 110 }}>Method</th>
-              <th>From</th>
-              <th>To</th>
+              <th className="hidden md:table-cell" style={{ width: 110 }}>
+                Method
+              </th>
+              <th className="hidden md:table-cell">From</th>
+              <th className="hidden md:table-cell">To</th>
               <SortableTh<SortKey>
                 k="value"
                 active={sort}
@@ -185,13 +187,13 @@ export default function TransactionsPage() {
                   <td>
                     <Hash value={t.hash} tone="link" length={12} href={`/transactions/${t.hash}`} />
                   </td>
-                  <td>
+                  <td className="hidden md:table-cell">
                     <MethodChip selector={t.method.selector} to={t.to} firnName={t.method.name} />
                   </td>
-                  <td>
+                  <td className="hidden md:table-cell">
                     <Hash value={t.from} tone="from" length={6} href={`/address/${t.from}`} />
                   </td>
-                  <td>
+                  <td className="hidden md:table-cell">
                     {t.to ? (
                       <Hash value={t.to} tone="to" length={6} href={`/address/${t.to}`} />
                     ) : (

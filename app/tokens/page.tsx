@@ -94,7 +94,7 @@ export default function TokensIndexPage() {
           Failed to load tokens: {String(error.message ?? error)}
         </div>
       ) : (
-        <div className="card border border-line rounded-[10px] bg-bg-elev">
+        <div className="card border border-line rounded-[10px] bg-bg-elev overflow-x-auto">
           <table className="lat-tbl">
             <thead>
               <tr>
@@ -119,6 +119,7 @@ export default function TokensIndexPage() {
                   onSort={setSort}
                   align="right"
                   width={140}
+                  className="hidden md:table-cell"
                 >
                   Holders
                 </SortableTh>
@@ -128,6 +129,7 @@ export default function TokensIndexPage() {
                   onSort={setSort}
                   align="right"
                   width={140}
+                  className="hidden md:table-cell"
                 >
                   First seen
                 </SortableTh>
@@ -177,10 +179,13 @@ export default function TokensIndexPage() {
                     <td className="mono" style={{ textAlign: "right" }}>
                       {formatNumber(token.transferCount)}
                     </td>
-                    <td className="mono" style={{ textAlign: "right" }}>
+                    <td className="mono hidden md:table-cell" style={{ textAlign: "right" }}>
                       {formatNumber(token.holders)}
                     </td>
-                    <td className="mono" style={{ textAlign: "right", color: "var(--ink-3)" }}>
+                    <td
+                      className="mono hidden md:table-cell"
+                      style={{ textAlign: "right", color: "var(--ink-3)" }}
+                    >
                       #{formatNumber(token.firstSeenBlock)}
                     </td>
                   </tr>
