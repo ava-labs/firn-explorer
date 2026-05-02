@@ -26,7 +26,11 @@ export function MethodChip({
   firnName?: string | null;
 }) {
   if (!selector) {
-    return <span style={{ color: "var(--ink-4)" }}>—</span>;
+    return (
+      <span title="Pure value transfer with no calldata">
+        <Chip tone="default">Native transfer</Chip>
+      </span>
+    );
   }
 
   // Fast path — render the firn-resolved name immediately. The chip

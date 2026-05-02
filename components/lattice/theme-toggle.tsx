@@ -1,28 +1,45 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 
 type Theme = "light" | "dark";
 
-export function ThemeToggle() {
-  const [theme, setTheme] = useState<Theme | null>(null);
+// Subscribe to data-theme changes on <html> via MutationObserver so the
+// button icon stays in sync with whatever flipped the attribute (the
+// bootstrap script in <head> on first paint, this component's toggle,
+// or any future system-preference listener). useSyncExternalStore keeps
+// the read DOM-driven without a setState-in-effect cascade.
+function subscribeTheme(onChange: () => void): () => void {
+  const obs = new MutationObserver(onChange);
+  obs.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ["data-theme"],
+  });
+  return () => obs.disconnect();
+}
 
-  useEffect(() => {
-    // Bootstrap script in <head> already set the data-theme attribute.
-    // Read it here to align state with what's currently on the DOM.
-    const current = document.documentElement.getAttribute("data-theme") as Theme | null;
-    setTheme(current ?? "light");
-  }, []);
+function getThemeSnapshot(): Theme {
+  const v = document.documentElement.getAttribute("data-theme");
+  return v === "dark" ? "dark" : "light";
+}
+
+function getServerThemeSnapshot(): Theme | null {
+  return null;
+}
+
+export function ThemeToggle() {
+  const theme = useSyncExternalStore(subscribeTheme, getThemeSnapshot, getServerThemeSnapshot);
 
   const toggle = () => {
     const next: Theme = theme === "dark" ? "light" : "dark";
+    // Flip the attribute; the MutationObserver in subscribeTheme will
+    // notify useSyncExternalStore which re-renders the icon.
     document.documentElement.setAttribute("data-theme", next);
     try {
       localStorage.setItem("explorer:theme", next);
     } catch {
       /* ignore */
     }
-    setTheme(next);
   };
 
   return (

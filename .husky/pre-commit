@@ -1,12 +1,18 @@
-# pre-commit: run lint-staged on the staged file set, then a fast
-# typecheck pass on the whole repo. lint-staged handles auto-fixable
-# violations (eslint --fix, prettier --write). The typecheck catches
-# cross-file regressions a per-file lint won't see — TypeScript needs
-# to walk the import graph to validate types.
+# pre-commit: typecheck first, then lint-staged. Both must pass to
+# allow the commit. The typecheck catches cross-file regressions a
+# per-file lint won't see; lint-staged runs `eslint --max-warnings=0`
+# + `prettier --check` per the package.json config so any warning
+# (including new architectural patterns we'd want flagged) blocks
+# the commit.
 #
-# This runs in <10s on a typical edit. If it ever drifts past 30s,
-# move the typecheck to a pre-push hook and keep pre-commit
-# lint-staged-only.
+# Genuine architectural exceptions (RAF render loops needing refs in
+# render, etc.) require an explicit eslint-disable comment with a
+# rationale. There is no escape hatch from this hook.
+#
+# Runs in <15s on a typical edit. If it drifts past 30s, move the
+# typecheck to a pre-push hook and keep pre-commit lint-staged-only.
 
-pnpm lint-staged
-pnpm typecheck
+set -e
+
+pnpm exec tsc --noEmit
+pnpm exec lint-staged

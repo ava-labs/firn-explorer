@@ -9,11 +9,19 @@ import { MethodChip } from "@/components/lattice/method-chip";
 import { AnimatedNumber } from "@/components/lattice/animated-number";
 import { Sparkline } from "@/components/lattice/sparkline";
 import { Skeleton } from "@/components/ui/skeleton";
+import { KpiCell } from "@/components/page/kpi-cell";
 import { useFreshHashes, useFreshKeys, useNowTick } from "@/lib/use-fresh";
 import { useExplorerBootstrap } from "@/lib/api/explorer";
 import { useLivePause, type LiveFeed } from "@/lib/api/live-pause";
 import type { ICMMessage } from "@/lib/api/types";
-import { formatNativeAmount, formatNumber, formatRelativeTime, truncateHash } from "@/lib/format";
+import {
+  formatNativeAmount,
+  formatNumber,
+  formatRelativeTime,
+  gasUsedPct,
+  gasUsedPctNum,
+  truncateHash,
+} from "@/lib/format";
 
 // On hyperscale L1s the ticker churns fast; show fewer rows so the user
 // can read individual entries instead of watching them blur past.
@@ -153,22 +161,30 @@ export default function Home() {
               borderTop: "1px solid var(--line)",
             }}
           >
-            <Kpi
+            <KpiCell
+              valueSize={28}
+              first
               label="Transactions"
               value={stats ? <AnimatedNumber value={stats.totalTransactions} /> : null}
               sub={stats ? `${formatNumber(stats.transactionsLast24h)} last 24h` : ""}
             />
-            <Kpi
+            <KpiCell
+              valueSize={28}
+              first
               label="Avg gas price"
               value={stats ? formatGwei(stats.gasPrice.average) : null}
               sub="median, 60s"
             />
-            <Kpi
+            <KpiCell
+              valueSize={28}
+              first
               label="Addresses"
               value={stats ? <AnimatedNumber value={stats.totalAddresses} /> : null}
               sub={<AddressDeltaSub delta={addrDelta} />}
             />
-            <Kpi
+            <KpiCell
+              valueSize={28}
+              first
               label="Block time"
               value={blockTimeMs ? `${(blockTimeMs / 1000).toFixed(2)}s` : null}
               sub="rolling avg"
@@ -609,44 +625,6 @@ function briefBlockchainId(id: string | undefined): string {
   return `${id.slice(0, 8)}…${id.slice(-4)}`;
 }
 
-function Kpi({
-  label,
-  value,
-  sub,
-}: {
-  label: string;
-  value: React.ReactNode;
-  sub: React.ReactNode;
-}) {
-  return (
-    <div style={{ padding: "20px 16px 0 0" }}>
-      <div className="eyebrow mb-2.5">{label}</div>
-      <div className="h-display" style={{ fontSize: 28 }}>
-        {value ?? <Skeleton className="h-7 w-24" />}
-      </div>
-      <div className="mono mt-1.5" style={{ fontSize: 11.5, color: "var(--ink-4)" }}>
-        {sub}
-      </div>
-    </div>
-  );
-}
-
-function gasUsedPctNum(used: string, limit: string): number {
-  try {
-    const u = BigInt(used);
-    const l = BigInt(limit);
-    if (l === 0n) return 0;
-    return Number((u * 10000n) / l) / 100;
-  } catch {
-    return 0;
-  }
-}
-
-function gasUsedPct(used: string, limit: string): string {
-  const n = gasUsedPctNum(used, limit);
-  return `${n.toFixed(n >= 10 ? 0 : 1)}%`;
-}
-
 // Address-count delta over a rolling time window. We hold a small ring
 // of {at, count} samples and compute % change vs the oldest sample
 // still inside the window — falls back to the earliest sample we have
@@ -695,6 +673,14 @@ function useAddressDelta(countStr: string | undefined, windowMs: number): Addres
     return () => clearInterval(id);
   }, [windowMs]);
 
+  // INTENTIONAL refs-in-render (same architectural pattern as
+  // sparkline.tsx): the 2s tick effect calls force() to bump a render,
+  // and this body reads samplesRef + Date.now() to compute a window
+  // delta against the latest wall-clock time. Moving samples into
+  // useState would re-allocate the array on every tick and break the
+  // 600s retention buffer. Date.now() impurity is required to slide
+  // the delta window. Refs and the impure clock read are correct here.
+  /* eslint-disable react-hooks/refs, react-hooks/purity */
   const samples = samplesRef.current;
   if (samples.length < 2) return null;
   const now = Date.now();
@@ -716,6 +702,7 @@ function useAddressDelta(countStr: string | undefined, windowMs: number): Addres
     baseline: baseline.count,
     current: current.count,
   };
+  /* eslint-enable react-hooks/refs, react-hooks/purity */
 }
 
 function AddressDeltaSub({ delta }: { delta: AddressDelta }) {

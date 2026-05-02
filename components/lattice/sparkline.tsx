@@ -166,13 +166,20 @@ export function Sparkline({
   // (Don't memo here — refs aren't observable by React, so the obvious
   // useMemo with `[force]` deps would never invalidate. v2 shipped that
   // bug; the chart was stuck blank.)
+  //
+  // INTENTIONAL: the RAF tick (see force-render effect above) drives a
+  // re-render every frame so the path geometry tracks wall-clock time;
+  // reading samplesRef.current and performance.now() during render is
+  // load-bearing for the animation, not a bug. Refs are stable across
+  // renders, and the impure `now` is exactly what we want here — each
+  // render samples a fresh "now" against fixed sample timestamps.
+  /* eslint-disable react-hooks/refs, react-hooks/purity */
   const samples = samplesRef.current;
   let d = "";
   let dArea = "";
   let ready = false;
   if (samples.length >= 2) {
     // y-scale max comes from the ingest path (per-tick), not per-frame.
-    // Reading the ref is fine in render — refs are stable across renders.
     const range = Math.max(1, yScaleRef.current.max * Y_HEADROOM);
 
     const now = performance.now();
@@ -189,6 +196,7 @@ export function Sparkline({
     dArea = `${d} L${lastX},${height} L${firstX},${height} Z`;
     ready = true;
   }
+  /* eslint-enable react-hooks/refs, react-hooks/purity */
 
   if (!ready) {
     return <svg width={fluid ? "100%" : width} height={height} aria-hidden />;

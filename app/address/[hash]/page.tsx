@@ -91,7 +91,10 @@ export default function AddressPage({ params }: { params: Promise<{ hash: string
   const { data: src, isPending: srcPending } = useContractSource(chain?.chainId, hash);
 
   const txs = txPage?.data;
-  const txCountLabel = useMemo(() => (txs ? formatNumber(txs.length) : null), [txs]);
+  // Prefixed with _ — currently unused; underscore satisfies the
+  // unused-vars rule while keeping the memo at hand for the next pass
+  // that wires it into the header label.
+  const _txCountLabel = useMemo(() => (txs ? formatNumber(txs.length) : null), [txs]);
 
   const verified = src?.match === "exact_match" || src?.match === "match";
   const contractName = src?.compilation?.name;
@@ -323,9 +326,9 @@ function TxsTab({
                           href={`/address/${counter}`}
                         />
                       ) : (
-                        <span className="mono" style={{ fontSize: 11.5, color: "var(--ink-4)" }}>
-                          create
-                        </span>
+                        <Link href={`/transactions/${t.hash}`} style={{ textDecoration: "none" }}>
+                          <Chip tone="steel">Contract creation</Chip>
+                        </Link>
                       )}
                     </td>
                     <td className="mono" style={{ textAlign: "right", color: "var(--ink)" }}>

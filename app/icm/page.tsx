@@ -7,6 +7,7 @@ import { Hash } from "@/components/lattice/hash";
 import { Chip } from "@/components/lattice/chip";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PauseButton } from "@/components/lattice/pause-button";
+import { ErrorBanner } from "@/components/page/error-banner";
 import { FilterBar, FilterInput, FilterPillGroup } from "@/components/lattice/filter-bar";
 import {
   SortableTh,
@@ -121,22 +122,7 @@ export default function ICMPage() {
         />
       </FilterBar>
 
-      {error ? (
-        <div
-          className="border rounded-md p-4 mb-6"
-          style={{
-            borderColor: "var(--accent-soft)",
-            background: "var(--accent-soft)",
-            color: "var(--accent-ink)",
-            fontSize: 13,
-          }}
-        >
-          <div style={{ fontWeight: 500, marginBottom: 4 }}>Couldn&apos;t load ICM messages</div>
-          <div className="mono" style={{ fontSize: 11.5, color: "var(--ink-3)" }}>
-            {error.message}
-          </div>
-        </div>
-      ) : null}
+      {error ? <ErrorBanner title="Couldn't load ICM messages" message={error.message} /> : null}
 
       <div className="card border border-line rounded-[10px] bg-bg-elev">
         <table className="lat-tbl">

@@ -56,24 +56,34 @@ interface NetworkCtx {
 const Ctx = createContext<NetworkCtx | null>(null);
 
 export function NetworkProvider({ children }: { children: ReactNode }) {
-  const [network, setNetworkState] = useState<NetworkID>(DEFAULT_NETWORK);
-  const queryClient = useQueryClient();
-
-  // Hydrate the saved choice on mount. SSR keeps the default to avoid
-  // hydration mismatch; the browser flips to the persisted value on first
-  // commit and updates the apiBase synchronously so the very first
-  // network-scoped fetch hits the correct firn.
-  useEffect(() => {
+  // Lazy initial state reads localStorage synchronously on the client so the
+  // first render already reflects the saved choice — no setState-in-effect
+  // cascade. On the server the function returns the default; React will
+  // re-evaluate this hook on the client where window is defined. This means
+  // the first client render may differ from the SSR'd HTML, which is fine
+  // because the consumers (data fetchers) only run after hydration anyway.
+  const [network, setNetworkState] = useState<NetworkID>(() => {
+    if (typeof window === "undefined") return DEFAULT_NETWORK;
     try {
-      const saved = localStorage.getItem(STORAGE_KEY) as NetworkID | null;
+      const saved = window.localStorage.getItem(STORAGE_KEY) as NetworkID | null;
       const conf = saved && NETWORKS.find((n) => n.id === saved);
-      if (conf?.url && conf.id !== DEFAULT_NETWORK) {
-        setApiBase(conf.url);
-        setNetworkState(conf.id);
-      }
+      return conf?.url ? conf.id : DEFAULT_NETWORK;
     } catch {
       /* localStorage may be blocked — silently keep default */
+      return DEFAULT_NETWORK;
     }
+  });
+  const queryClient = useQueryClient();
+
+  // Sync the apiBase module global with the (possibly localStorage-restored)
+  // network choice on first commit. This is a side-effect on an external
+  // system, not React state, so it's the right job for an effect.
+  useEffect(() => {
+    const conf = NETWORKS.find((n) => n.id === network);
+    if (conf?.url) setApiBase(conf.url);
+    // Run only on mount — subsequent setNetwork() calls update apiBase
+    // synchronously (see below) before triggering a re-render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const config = useMemo(() => NETWORKS.find((n) => n.id === network) ?? NETWORKS[0], [network]);

@@ -12,8 +12,21 @@ import {
 import { Hash } from "@/components/lattice/hash";
 import { Chip } from "@/components/lattice/chip";
 import { MethodChip } from "@/components/lattice/method-chip";
+import { Tabs } from "@/components/lattice/tabs";
+import { DetailRow } from "@/components/page/detail-row";
+import { ErrorBanner } from "@/components/page/error-banner";
+import { KpiCell } from "@/components/page/kpi-cell";
+import { NotFoundDetail } from "@/components/page/not-found-detail";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatGwei, formatNativeAmount, formatNumber, formatRelativeTime } from "@/lib/format";
+import {
+  formatBlockTime,
+  formatGwei,
+  formatNativeAmount,
+  formatNumber,
+  formatRelativeTime,
+  formatTxFee,
+  gasUtilization,
+} from "@/lib/format";
 import { decodeCorethExtra } from "@/lib/coreth-extra";
 import type { ICMMessage } from "@/lib/api/types";
 
@@ -37,70 +50,15 @@ export default function BlockDetailPage({ params }: { params: Promise<{ id: stri
   const symbol = chain?.nativeToken.symbol ?? "";
 
   if (error) {
-    const notFound = /not[_ ]?found/i.test(error.message);
     return (
-      <div className="px-10 py-8 pb-12 max-w-[1080px] mx-auto">
-        <Link
-          href="/blocks"
-          style={{
-            fontSize: 12,
-            color: "var(--ink-4)",
-            textDecoration: "none",
-            display: "inline-block",
-            marginBottom: 16,
-          }}
-        >
-          ← All blocks
-        </Link>
-        <div className="eyebrow mb-2.5">◆ Block</div>
-        <div className="h-display mb-2" style={{ fontSize: 32 }}>
-          {notFound ? "Not found" : "Couldn't load block"}
-        </div>
-        <div
-          className="mono"
-          style={{
-            fontSize: 12.5,
-            color: "var(--ink-3)",
-            wordBreak: "break-all",
-            marginBottom: 16,
-          }}
-        >
-          {id}
-        </div>
-        {notFound ? (
-          <div
-            style={{
-              fontSize: 13.5,
-              color: "var(--ink-3)",
-              maxWidth: 640,
-              marginBottom: 20,
-              lineHeight: 1.55,
-            }}
-          >
-            firn doesn&apos;t have this block in its index. If you&apos;re running{" "}
-            <code className="mono" style={{ fontSize: 12 }}>
-              -store=mem
-            </code>
-            , the index resets every time firn restarts.
-          </div>
-        ) : (
-          <div
-            className="mono"
-            style={{
-              fontSize: 11.5,
-              color: "var(--ink-4)",
-              maxWidth: 640,
-              marginBottom: 20,
-              wordBreak: "break-all",
-            }}
-          >
-            {error.message}
-          </div>
-        )}
-        <Link href="/blocks" className="lat-btn">
-          See latest blocks →
-        </Link>
-      </div>
+      <NotFoundDetail
+        kind="Block"
+        indexHref="/blocks"
+        indexLabel="All blocks"
+        actionLabel="See latest blocks →"
+        identifier={id}
+        error={error}
+      />
     );
   }
 
@@ -147,31 +105,36 @@ export default function BlockDetailPage({ params }: { params: Promise<{ id: stri
           marginBottom: 28,
         }}
       >
-        <StatCell
+        <KpiCell
+          valueSize={22}
           label="Transactions"
           value={block ? String(block.transactionsCount) : null}
           sub={block ? `${gasUtilization(block.gas)} gas used` : ""}
           divider
         />
-        <StatCell
+        <KpiCell
+          valueSize={22}
           label="Gas used"
           value={block ? formatNumber(block.gas.used) : null}
           sub={block ? `of ${formatNumber(block.gas.limit)}` : ""}
           divider
         />
-        <StatCell
+        <KpiCell
+          valueSize={22}
           label="Base fee"
           value={block ? formatGwei(block.gas.baseFeePerGas) : null}
           sub="EIP-1559"
           divider
         />
-        <StatCell
+        <KpiCell
+          valueSize={22}
           label="Size"
           value={block ? `${(block.size / 1024).toFixed(1)} KB` : null}
           sub={block ? `${block.transactionsCount} txns` : ""}
           divider
         />
-        <StatCell
+        <KpiCell
+          valueSize={22}
           label="Timestamp"
           value={block ? formatRelativeTime(block.timestamp) : null}
           sub={block ? new Date(block.timestamp).toUTCString().replace("GMT", "UTC") : ""}
@@ -181,10 +144,17 @@ export default function BlockDetailPage({ params }: { params: Promise<{ id: stri
       {/* Tabs */}
       <Tabs
         active={tab}
-        onChange={setTab}
+        onChange={(id) => setTab(id as TabId)}
         tabs={[
           { id: "overview", label: "Details" },
-          { id: "txs", label: "Transactions", count: block?.transactionsCount },
+          {
+            id: "txs",
+            label: "Transactions",
+            count:
+              typeof block?.transactionsCount === "number"
+                ? formatNumber(block.transactionsCount)
+                : null,
+          },
           { id: "icm", label: "ICM" },
           { id: "consensus", label: "Consensus" },
         ]}
@@ -320,9 +290,9 @@ export default function BlockDetailPage({ params }: { params: Promise<{ id: stri
                       {t.to ? (
                         <Hash value={t.to} tone="to" length={8} href={`/address/${t.to}`} />
                       ) : (
-                        <span className="mono" style={{ fontSize: 11.5, color: "var(--ink-4)" }}>
-                          create
-                        </span>
+                        <Link href={`/transactions/${t.hash}`} style={{ textDecoration: "none" }}>
+                          <Chip tone="steel">Contract creation</Chip>
+                        </Link>
                       )}
                     </td>
                     <td className="mono" style={{ textAlign: "right" }}>
@@ -675,13 +645,6 @@ function RawBlob({ label, value }: { label: string; value: string }) {
   );
 }
 
-function formatBlockTime(ms: number): string {
-  if (ms < 0) return "—";
-  if (ms < 1000) return `${ms} ms`;
-  const s = ms / 1000;
-  return `${s.toFixed(s < 10 ? 2 : 1)} s`;
-}
-
 function PrevNextLink({ kind, number }: { kind: "prev" | "next"; number: number }) {
   const target = kind === "prev" ? number - 1 : number + 1;
   const disabled = kind === "prev" && target < 0;
@@ -727,114 +690,6 @@ function PrevNextLink({ kind, number }: { kind: "prev" | "next"; number: number 
   );
 }
 
-function StatCell({
-  label,
-  value,
-  sub,
-  divider = false,
-}: {
-  label: string;
-  value: string | null;
-  sub: string;
-  divider?: boolean;
-}) {
-  return (
-    <div
-      style={{
-        padding: "20px 18px",
-        borderRight: divider ? "1px solid var(--line)" : "none",
-      }}
-    >
-      <div className="eyebrow" style={{ marginBottom: 10 }}>
-        {label}
-      </div>
-      <div className="h-display" style={{ fontSize: 22 }}>
-        {value ?? <Skeleton className="h-6 w-20" />}
-      </div>
-      <div className="mono" style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 4 }}>
-        {sub}
-      </div>
-    </div>
-  );
-}
-
-function DetailRow({ label, children }: { label: React.ReactNode; children: React.ReactNode }) {
-  return (
-    <>
-      <div
-        style={{
-          fontSize: 12,
-          color: "var(--ink-4)",
-          textTransform: "uppercase",
-          letterSpacing: "0.05em",
-          fontFamily: "var(--font-mono), ui-monospace, monospace",
-        }}
-      >
-        {label}
-      </div>
-      <div style={{ fontSize: 13.5 }}>{children}</div>
-    </>
-  );
-}
-
-function Tabs<T extends string>({
-  active,
-  onChange,
-  tabs,
-}: {
-  active: T;
-  onChange: (id: T) => void;
-  tabs: { id: T; label: string; count?: number }[];
-}) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        gap: 0,
-        borderBottom: "1px solid var(--line)",
-      }}
-    >
-      {tabs.map((t) => {
-        const isActive = t.id === active;
-        return (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => onChange(t.id)}
-            style={{
-              background: "none",
-              border: "none",
-              padding: "12px 18px",
-              fontSize: 13,
-              fontWeight: 500,
-              color: isActive ? "var(--ink)" : "var(--ink-4)",
-              borderBottom: isActive ? "1.5px solid var(--ink)" : "1.5px solid transparent",
-              marginBottom: -1,
-              cursor: "pointer",
-              fontFamily: "inherit",
-            }}
-          >
-            {t.label}
-            {typeof t.count === "number" ? (
-              <span
-                className="mono"
-                style={{
-                  marginLeft: 6,
-                  fontSize: 11,
-                  color: "var(--ink-4)",
-                  fontWeight: 400,
-                }}
-              >
-                {formatNumber(t.count)}
-              </span>
-            ) : null}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
 /**
  * ICM tab for the block detail page. Hits `GET /v1/icm/messages?block=N`
  * — firn's icm decoder owns the route and the SQL filter is on
@@ -861,20 +716,7 @@ function ICMTab({
 
   if (error) {
     return (
-      <div
-        className="border rounded-md p-4 mt-6"
-        style={{
-          borderColor: "var(--accent-soft)",
-          background: "var(--accent-soft)",
-          color: "var(--accent-ink)",
-          fontSize: 13,
-        }}
-      >
-        <div style={{ fontWeight: 500, marginBottom: 4 }}>Couldn&apos;t load ICM messages</div>
-        <div className="mono" style={{ fontSize: 11.5, color: "var(--ink-3)" }}>
-          {error.message}
-        </div>
-      </div>
+      <ErrorBanner title="Couldn't load ICM messages" message={error.message} className="mt-6" />
     );
   }
 
@@ -1055,24 +897,4 @@ function eqHex(a: string, b: string): boolean {
 function truncateBytes32(id: string): string {
   if (id.length <= 14) return id;
   return `${id.slice(0, 8)}…${id.slice(-4)}`;
-}
-
-function gasUtilization(gas: { limit: string; used: string }): string {
-  try {
-    const limit = Number(gas.limit);
-    const used = Number(gas.used);
-    if (!limit) return "0%";
-    return `${((used / limit) * 100).toFixed(0)}%`;
-  } catch {
-    return "—";
-  }
-}
-
-function formatTxFee(gasUsed: number, gasPriceWei: string, symbol: string): string {
-  try {
-    const wei = BigInt(gasPriceWei) * BigInt(gasUsed);
-    return formatNativeAmount(wei.toString(), symbol);
-  } catch {
-    return "—";
-  }
 }

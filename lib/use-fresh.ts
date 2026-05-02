@@ -63,6 +63,13 @@ export function useFreshKeys<T>(
     }
     if (arrivals.length === 0) return;
 
+    // We're synchronizing with an external timeline (the items prop is
+    // pushed from upstream queries / SSE), and this state is genuinely
+    // time-derived: it expires via setTimeout below. Calling setState
+    // here is the intended side-effect of an arrival, not a
+    // render-cascade — there's no way to express "set, then unset after
+    // N ms" without a setState pair.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setFresh((prev) => {
       const next = new Set(prev);
       for (const h of arrivals) next.add(h);

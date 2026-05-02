@@ -81,13 +81,6 @@ function pickUptime(entry: L1UptimeEntry): string | number | undefined {
   return entry.uptimePercent ?? entry.uptime;
 }
 
-function formatFee(fee: string | undefined): string {
-  if (!fee) return "—";
-  const n = parseFloat(fee);
-  if (Number.isNaN(n)) return "—";
-  return `${n.toFixed(2)}%`;
-}
-
 // P-Chain returns timestamps as decimal-string unix seconds.
 function parsePChainTime(s: string | undefined): number | null {
   if (!s) return null;
@@ -119,18 +112,6 @@ function formatPeriodRemaining(end: string | undefined): string {
     return min ? `${hr}h ${min}m` : `${hr}h`;
   }
   return `${Math.max(1, Math.floor(sec / 60))}m`;
-}
-
-function formatAbsoluteTime(s: string | undefined): string {
-  const ms = parsePChainTime(s);
-  if (ms == null) return "—";
-  return new Date(ms).toLocaleString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
 }
 
 export default function ValidatorsPage() {
@@ -166,7 +147,10 @@ export default function ValidatorsPage() {
   // pull the symbol from chain.nativeToken (which is "ECH" on Echo, etc.);
   // the column is always AVAX.
   const symbol = "AVAX";
-  const validators = vsResp?.validators ?? [];
+  // Stable identity: wrap the array-with-default in useMemo so
+  // downstream useMemo deps (filtered, totals) don't invalidate on
+  // every render when vsResp is undefined.
+  const validators = useMemo(() => vsResp?.validators ?? [], [vsResp]);
   const isPrimary = chain?.subnetId === "11111111111111111111111111111111LpoYY";
 
   const filtered = useMemo(() => {
@@ -230,7 +214,9 @@ export default function ValidatorsPage() {
         }
       }
       if (v.publicKey || v.signer?.publicKey) blsCount += 1;
-      const u = uptimeFor(v);
+      // Inline lookup so the useMemo deps stay precise (uptimeByNode +
+      // validators) without depending on a closure that itself reads them.
+      const u = uptimeByNode.get(v.nodeID) ?? v.uptime;
       if (u !== undefined && u !== "") {
         const n = typeof u === "number" ? u : parseFloat(u);
         if (Number.isFinite(n)) {

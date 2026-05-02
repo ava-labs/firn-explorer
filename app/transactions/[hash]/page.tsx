@@ -7,8 +7,17 @@ import type { Log, Trace, Transaction } from "@/lib/api/types";
 import { Hash } from "@/components/lattice/hash";
 import { Chip } from "@/components/lattice/chip";
 import { MethodChip } from "@/components/lattice/method-chip";
+import { Tabs } from "@/components/lattice/tabs";
+import { DetailRow } from "@/components/page/detail-row";
+import { NotFoundDetail } from "@/components/page/not-found-detail";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatGwei, formatNativeAmount, formatNumber, formatRelativeTime } from "@/lib/format";
+import {
+  formatGwei,
+  formatNativeAmount,
+  formatNumber,
+  formatRelativeTime,
+  formatTxFee,
+} from "@/lib/format";
 
 type TabId = "overview" | "logs" | "trace" | "raw";
 
@@ -21,71 +30,15 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ ha
   const symbol = chain?.nativeToken.symbol ?? "";
 
   if (error) {
-    const notFound = /not[_ ]?found/i.test(error.message);
     return (
-      <div className="px-10 py-8 pb-12 max-w-[1080px] mx-auto">
-        <Link
-          href="/transactions"
-          style={{
-            fontSize: 12,
-            color: "var(--ink-4)",
-            textDecoration: "none",
-            display: "inline-block",
-            marginBottom: 16,
-          }}
-        >
-          ← All transactions
-        </Link>
-        <div className="eyebrow mb-2.5">◆ Transaction</div>
-        <div className="h-display mb-2" style={{ fontSize: 32 }}>
-          {notFound ? "Not found" : "Couldn't load transaction"}
-        </div>
-        <div
-          className="mono"
-          style={{
-            fontSize: 12.5,
-            color: "var(--ink-3)",
-            wordBreak: "break-all",
-            marginBottom: 16,
-          }}
-        >
-          {hash}
-        </div>
-        {notFound ? (
-          <div
-            style={{
-              fontSize: 13.5,
-              color: "var(--ink-3)",
-              maxWidth: 640,
-              marginBottom: 20,
-              lineHeight: 1.55,
-            }}
-          >
-            firn doesn&apos;t have this transaction in its index. If you&apos;re running{" "}
-            <code className="mono" style={{ fontSize: 12 }}>
-              -store=mem
-            </code>
-            , the index resets every time firn restarts — old cached entries in your browser may
-            point at transactions that no longer exist. Refreshing the page should reconcile.
-          </div>
-        ) : (
-          <div
-            className="mono"
-            style={{
-              fontSize: 11.5,
-              color: "var(--ink-4)",
-              maxWidth: 640,
-              marginBottom: 20,
-              wordBreak: "break-all",
-            }}
-          >
-            {error.message}
-          </div>
-        )}
-        <Link href="/transactions" className="lat-btn">
-          See latest transactions →
-        </Link>
-      </div>
+      <NotFoundDetail
+        kind="Transaction"
+        indexHref="/transactions"
+        indexLabel="All transactions"
+        actionLabel="See latest transactions →"
+        identifier={hash}
+        error={error}
+      />
     );
   }
 
@@ -188,11 +141,19 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ ha
       {/* Tabs */}
       <Tabs
         active={tab}
-        onChange={setTab}
+        onChange={(id) => setTab(id as TabId)}
         tabs={[
           { id: "overview", label: "Overview" },
-          { id: "logs", label: "Logs", count: tx?.logsCount },
-          { id: "trace", label: "Trace", count: tx?.tracesCount },
+          {
+            id: "logs",
+            label: "Logs",
+            count: typeof tx?.logsCount === "number" ? formatNumber(tx.logsCount) : null,
+          },
+          {
+            id: "trace",
+            label: "Trace",
+            count: typeof tx?.tracesCount === "number" ? formatNumber(tx.tracesCount) : null,
+          },
           { id: "raw", label: "Raw" },
         ]}
       />
@@ -266,11 +227,15 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ ha
                 </span>
               </DetailRow>
               <DetailRow label="Method">
-                {tx.method.selector && tx.method.selector !== "0x" ? (
-                  <MethodChip selector={tx.method.selector} to={tx.to} firnName={tx.method.name} />
-                ) : (
-                  <span style={{ color: "var(--ink-4)" }}>—</span>
-                )}
+                <MethodChip
+                  selector={
+                    tx.method.selector && tx.method.selector !== "0x"
+                      ? tx.method.selector
+                      : undefined
+                  }
+                  to={tx.to}
+                  firnName={tx.method.name}
+                />
               </DetailRow>
               <DetailRow label="Gas">
                 <span className="mono" style={{ fontSize: 12.5 }}>
@@ -490,7 +455,7 @@ function TraceLine({ trace }: { trace: Trace }) {
       {depth > 0 ? <span style={{ color: "var(--ink-4)" }}>↳ </span> : null}
       <span style={{ color: "var(--ink-3)" }}>{trace.callType.toUpperCase()}</span>{" "}
       <span className="mono" style={{ color: "var(--accent-ink)", wordBreak: "break-all" }}>
-        {trace.to ? trace.to : "create"}
+        {trace.to ? trace.to : "(contract creation)"}
       </span>
       <span style={{ color: "var(--ink-4)" }}> from </span>
       <span className="mono" style={{ wordBreak: "break-all" }}>
@@ -499,95 +464,10 @@ function TraceLine({ trace }: { trace: Trace }) {
       {BigInt(trace.value || "0") > 0n ? (
         <span style={{ color: "var(--ink-3)" }}> · value {trace.value}</span>
       ) : null}
+      {/* eslint-disable-next-line react/jsx-no-comment-textnodes */}
       <span style={{ color: "var(--ink-4)" }}> // {formatNumber(trace.gasUsed)} gas</span>
     </div>
   );
-}
-
-function DetailRow({ label, children }: { label: React.ReactNode; children: React.ReactNode }) {
-  return (
-    <>
-      <div
-        style={{
-          fontSize: 12,
-          color: "var(--ink-4)",
-          textTransform: "uppercase",
-          letterSpacing: "0.05em",
-          fontFamily: "var(--font-mono), ui-monospace, monospace",
-        }}
-      >
-        {label}
-      </div>
-      <div style={{ fontSize: 13.5 }}>{children}</div>
-    </>
-  );
-}
-
-function Tabs<T extends string>({
-  active,
-  onChange,
-  tabs,
-}: {
-  active: T;
-  onChange: (id: T) => void;
-  tabs: { id: T; label: string; count?: number }[];
-}) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        gap: 0,
-        borderBottom: "1px solid var(--line)",
-      }}
-    >
-      {tabs.map((t) => {
-        const isActive = t.id === active;
-        return (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => onChange(t.id)}
-            style={{
-              background: "none",
-              border: "none",
-              padding: "12px 18px",
-              fontSize: 13,
-              fontWeight: 500,
-              color: isActive ? "var(--ink)" : "var(--ink-4)",
-              borderBottom: isActive ? "1.5px solid var(--ink)" : "1.5px solid transparent",
-              marginBottom: -1,
-              cursor: "pointer",
-              fontFamily: "inherit",
-            }}
-          >
-            {t.label}
-            {typeof t.count === "number" ? (
-              <span
-                className="mono"
-                style={{
-                  marginLeft: 6,
-                  fontSize: 11,
-                  color: "var(--ink-4)",
-                  fontWeight: 400,
-                }}
-              >
-                {formatNumber(t.count)}
-              </span>
-            ) : null}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-function formatTxFee(gasUsed: number, gasPriceWei: string, symbol: string): string {
-  try {
-    const wei = BigInt(gasPriceWei) * BigInt(gasUsed);
-    return formatNativeAmount(wei.toString(), symbol);
-  } catch {
-    return "—";
-  }
 }
 
 function rawTx(tx: Transaction) {

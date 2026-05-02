@@ -9,16 +9,17 @@ const STORAGE_KEY = "explorer:api-playground:endpoint";
 
 export default function APIPlaygroundPage() {
   const { data: chain } = useChain();
-  const [selectedId, setSelectedId] = useState<string>(CATALOG[0].endpoints[0].id);
-
-  // Restore last-picked endpoint across reloads.
-  useEffect(() => {
-    if (typeof window === "undefined") return;
+  // Lazy initial state restores the last-picked endpoint synchronously on
+  // the client so the first render already shows the right row — no
+  // setState-in-effect cascade. SSR returns the catalog default.
+  const [selectedId, setSelectedId] = useState<string>(() => {
+    if (typeof window === "undefined") return CATALOG[0].endpoints[0].id;
     const saved = window.localStorage.getItem(STORAGE_KEY);
     if (saved && CATALOG.some((g) => g.endpoints.some((e) => e.id === saved))) {
-      setSelectedId(saved);
+      return saved;
     }
-  }, []);
+    return CATALOG[0].endpoints[0].id;
+  });
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -136,6 +137,13 @@ function Main({
   // sensible defaults so the user can hit "Send" immediately on most rows
   // without typing — addresses come from the chain's first known token /
   // the burn address; numeric ids fall back to "1".
+  //
+  // setState-in-effect is intentional: this synchronizes input state to an
+  // external selection (the endpoint id is effectively the URL/route for
+  // this panel). exhaustive-deps would have us depend on the whole
+  // endpoint object, which would re-fire the reset on every parent
+  // re-render and clobber user input.
+  /* eslint-disable react-hooks/exhaustive-deps, react-hooks/set-state-in-effect */
   useEffect(() => {
     const nextPath: Record<string, string> = {};
     for (const p of endpoint.pathParams ?? []) {
@@ -152,6 +160,7 @@ function Main({
     setBody(endpoint.exampleBody ?? "");
     setRun({ status: "idle" });
   }, [endpoint.id]);
+  /* eslint-enable react-hooks/exhaustive-deps, react-hooks/set-state-in-effect */
 
   const resolvedPath = useMemo(() => {
     let p = endpoint.path;
@@ -215,6 +224,12 @@ function Main({
 
   // Convenience defaults — fill in chain-aware suggestions on first render of
   // a freshly-selected endpoint, but only if the user hasn't typed yet.
+  //
+  // Same exhaustive-deps story as above: keying on endpoint.id (not the
+  // whole object) avoids re-running on parent re-renders. setState-in-effect
+  // is the intended sync from the chain helpers (an external store) into
+  // the per-endpoint input form.
+  /* eslint-disable react-hooks/exhaustive-deps, react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!chainHelpers) return;
     setPathValues((prev) => {
@@ -235,6 +250,7 @@ function Main({
       return out;
     });
   }, [endpoint.id, chainHelpers]);
+  /* eslint-enable react-hooks/exhaustive-deps, react-hooks/set-state-in-effect */
 
   return (
     <section style={{ padding: "32px 36px 64px" }}>
