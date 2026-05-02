@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useMemo } from "react";
+import { Suspense, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiGet } from "@/lib/api/client";
 import type { Block, Transaction } from "@/lib/api/types";
@@ -78,7 +78,22 @@ function useTxMatch(p: Pattern) {
 // ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
+//
+// Wrap the inner component (which calls useSearchParams) in a Suspense
+// boundary at the export — Next.js 16 requires this for any /search-style
+// page where the params are read on the client. Without the boundary the
+// static prerender bails with `useSearchParams() should be wrapped in a
+// suspense boundary`. See node_modules/next/dist/docs/01-app/03-api-
+// reference/04-functions/use-search-params.md.
 export default function SearchPage() {
+  return (
+    <Suspense fallback={null}>
+      <SearchPageInner />
+    </Suspense>
+  );
+}
+
+function SearchPageInner() {
   const params = useSearchParams();
   const q = params.get("q") ?? "";
   const pattern = useMemo(() => classify(q), [q]);

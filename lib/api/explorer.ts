@@ -272,14 +272,17 @@ function mergeTickIntoBootstrap(
       ? []
       : tick.icm.filter((m) => !seenIcm.has(`${m.transactionHash}-${m.logIndex}`));
 
-    // Drop oldest tps point per shift, append new. For wallclock
-    // ticks (shift=0) we still scroll one slot so dead chains' charts
-    // keep moving — the new point is just zero.
+    // Drop oldest tps point per shift, then fill the freed slots with
+    // the new (smoothed) sample. The backend's tpsPoint is already a
+    // rolling average over the last N blocks, so the in-between slots
+    // for a multi-block shift would have essentially the same value —
+    // padding with zeros here is what created the strobe pattern on
+    // sub-second block chains. For wallclock ticks (shift=0) we still
+    // scroll one slot so dead chains' charts keep moving.
     const advance = Math.max(1, tick.shift);
     const tpsPoints = [
       ...prev.stats.tps.points.slice(advance),
-      ...new Array(advance - 1).fill(0),
-      tick.tpsPoint,
+      ...new Array(advance).fill(tick.tpsPoint),
     ].slice(-prev.stats.tps.windowSize);
 
     const next: ExplorerBootstrap = {
