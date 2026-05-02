@@ -391,9 +391,86 @@ export interface ICMMessage {
   amount?: string;
   /** Canonical Warp message bytes (hex). */
   unsignedMessage?: string;
+  /** Decoded Warp envelope — present on SendWarpMessage events when the
+   *  unsignedMessage parses cleanly through avalanchego's Warp codec.
+   *  See firn/internal/decoders/icm/decoder.go::WarpEnvelope. */
+  warpEnvelope?: WarpEnvelope;
   /** Raw ABI-encoded `data` from the log; consumers can decode the deeper
    *  TeleporterMessage / TeleporterFeeInfo structs when needed. */
   rawData?: string;
+  /** Decoded TeleporterMessage struct (Send/Receive/Failed events). */
+  teleporterMessage?: TeleporterMessageDecoded;
+  /** Decoded TeleporterFeeInfo (Send / AddFeeAmount / ReceiptReceived). */
+  feeInfo?: TeleporterFeeInfoDecoded;
+  /** Layered decode of the application payload riding inside
+   *  TeleporterMessage.message. Always populated when teleporterMessage
+   *  is set. See firn/internal/decoders/icm/appmessage.go. */
+  appMessage?: AppMessage;
+}
+
+/** Mirrors firn's TeleporterMessageDecoded — wire-friendly types
+ *  (decimal-string bigints, lowercase 0x-hex addresses). */
+export interface TeleporterMessageDecoded {
+  messageNonce: string;
+  originSenderAddress: string;
+  destinationBlockchainId: string;
+  destinationAddress: string;
+  requiredGasLimit: string;
+  allowedRelayerAddresses: string[];
+  receipts: TeleporterMessageReceiptDecoded[];
+  messageHex: string;
+}
+
+export interface TeleporterMessageReceiptDecoded {
+  receivedMessageNonce: string;
+  relayerRewardAddress: string;
+}
+
+export interface TeleporterFeeInfoDecoded {
+  feeTokenAddress: string;
+  amount: string;
+}
+
+/** Decoded application payload from inside TeleporterMessage.message.
+ *  See firn/internal/decoders/icm/appmessage.go. */
+export interface AppMessage {
+  bytesHex: string;
+  envelope?: AppMessageEnvelope;
+  /** Recognized protocol — currently "ICTT" or empty. */
+  protocol?: string;
+  /** Recognized message kind under that protocol — e.g. "SINGLE_HOP_SEND". */
+  kindLabel?: string;
+  fields?: AppMessageFieldNode[];
+}
+
+export interface AppMessageEnvelope {
+  /** decimal-stringified uint256 */
+  messageType: string;
+  payloadHex: string;
+}
+
+export interface AppMessageFieldNode {
+  name: string;
+  /** "address" | "uint256" | "uint8" | "bytes32" | "bytes" | "address[]" */
+  type: string;
+  value: string;
+  items?: AppMessageFieldNode[];
+}
+
+/** Decoded outer Warp envelope. networkID + sourceChainID come from
+ *  avalanchego's `warp.UnsignedMessage`; addressedCall comes from
+ *  `payload.AddressedCall` when typeID=1. */
+export interface WarpEnvelope {
+  networkId: number;
+  sourceChainId: string;
+  addressedCall?: WarpAddressedCall;
+}
+
+export interface WarpAddressedCall {
+  sourceAddress: string;
+  /** The protocol-specific payload (e.g. ABI-encoded TeleporterMessage).
+   *  Frontend decoders consume this for deeper rendering. */
+  payloadHex: string;
 }
 
 export interface APIError {

@@ -11,6 +11,7 @@ import { Sparkline } from "@/components/lattice/sparkline";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useFreshHashes, useFreshKeys, useNowTick } from "@/lib/use-fresh";
 import { useExplorerBootstrap } from "@/lib/api/explorer";
+import { useLivePause, type LiveFeed } from "@/lib/api/live-pause";
 import type { ICMMessage } from "@/lib/api/types";
 import { formatNativeAmount, formatNumber, formatRelativeTime, truncateHash } from "@/lib/format";
 
@@ -18,6 +19,54 @@ import { formatNativeAmount, formatNumber, formatRelativeTime, truncateHash } fr
 // can read individual entries instead of watching them blur past.
 const HOME_LIVE_BLOCKS = 5;
 const HOME_LIVE_TXS = 5;
+
+// Grace period before un-pausing a list after the cursor leaves. Without
+// this, micro-jitter (cursor briefly grazing the edge of a row that just
+// got prepended) toggles pause off→on→off, defeating the click-stability
+// the pause exists for. 300ms is short enough that intentional cursor
+// exits feel snappy and long enough to absorb sub-frame jitter.
+const HOVER_PAUSE_GRACE_MS = 300;
+
+/**
+ * Wire the live-pause infrastructure to mouse hover. Returns the props
+ * to spread on a container — hovering pauses the named feed; leaving
+ * resumes after a short grace window. Existing in-flight grace timers
+ * are cancelled when the mouse re-enters mid-grace, so a hover stays
+ * "stuck" for the entire visit.
+ *
+ * Why on the home page specifically: at sub-second block times the live
+ * blocks panel and transactions table prepend rows faster than a click
+ * can register. Pause-on-hover lets the user actually click a row while
+ * the feed continues underneath; the next tick after they leave repaints
+ * with whatever they missed.
+ */
+function useHoverPause(feed: LiveFeed) {
+  const { setPaused } = useLivePause();
+  const graceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onMouseEnter = () => {
+    if (graceTimer.current) {
+      clearTimeout(graceTimer.current);
+      graceTimer.current = null;
+    }
+    setPaused(feed, true);
+  };
+  const onMouseLeave = () => {
+    if (graceTimer.current) clearTimeout(graceTimer.current);
+    graceTimer.current = setTimeout(() => {
+      setPaused(feed, false);
+      graceTimer.current = null;
+    }, HOVER_PAUSE_GRACE_MS);
+  };
+  // Tab/keyboard users — focus also pauses, blur resumes after grace.
+  // Important for accessibility and for cmd-clicking via keyboard nav.
+  useEffect(() => {
+    return () => {
+      if (graceTimer.current) clearTimeout(graceTimer.current);
+      setPaused(feed, false);
+    };
+  }, [feed, setPaused]);
+  return { onMouseEnter, onMouseLeave, onFocus: onMouseEnter, onBlur: onMouseLeave };
+}
 
 export default function Home() {
   const router = useRouter();
@@ -52,6 +101,12 @@ export default function Home() {
   // transforms involved, so it stays clean at any TPS.
   const freshBlocks = useFreshHashes(blocks);
   const freshTxs = useFreshHashes(txs);
+  // Pause-on-hover: at sub-second block times rows shuffle faster than
+  // a user can click. Hovering the panel freezes the visible rows while
+  // the feed keeps running; leaving repaints from the latest tick.
+  const blocksHover = useHoverPause("blocks");
+  const txsHover = useHoverPause("transactions");
+  const { paused } = useLivePause();
   // Re-render every second so "Xs ago" labels stay current between feed ticks.
   useNowTick(1000);
 
@@ -148,17 +203,22 @@ export default function Home() {
         </div>
 
         {/* Live ticker */}
-        <div className="card overflow-hidden border border-line rounded-[10px] bg-bg-elev">
+        <div
+          className="card overflow-hidden border border-line rounded-[10px] bg-bg-elev"
+          {...blocksHover}
+        >
           <div
             className="flex items-center justify-between border-b border-line"
             style={{ padding: "14px 18px" }}
           >
             <div className="flex items-center gap-2">
-              <span className="live-dot" />
-              <span style={{ fontSize: 12, fontWeight: 500 }}>Live blocks</span>
+              <span className={paused.blocks ? undefined : "live-dot"} />
+              <span style={{ fontSize: 12, fontWeight: 500 }}>
+                {paused.blocks ? "Paused on hover" : "Live blocks"}
+              </span>
             </div>
             <span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>
-              via WebSocket
+              {paused.blocks ? "click to inspect" : "via WebSocket"}
             </span>
           </div>
           <div>
@@ -304,7 +364,7 @@ export default function Home() {
             View all →
           </Link>
         </div>
-        <div className="card border border-line rounded-[10px] bg-bg-elev">
+        <div className="card border border-line rounded-[10px] bg-bg-elev" {...txsHover}>
           <table className="lat-tbl">
             <thead>
               <tr>
@@ -432,9 +492,15 @@ function ICMRow({
   // we're rendering raw hex.
   const sourceResolved = !!m.sourceBlockchainName;
   const destResolved = !!m.destinationBlockchainName;
+  // Row click goes to the message detail page (with full event timeline +
+  // decoded payload) when we have a messageId. Falls back to the raw tx
+  // for events without one (RelayerRewardsRedeemed, BlockchainIDInitialized).
+  // The detail page itself links to the transaction, so this isn't a
+  // navigation dead-end — it's just a richer first-stop.
+  const rowHref = m.messageId ? `/icm/${m.messageId}` : `/transactions/${m.transactionHash}`;
   return (
     <Link
-      href={`/transactions/${m.transactionHash}`}
+      href={rowHref}
       className={fresh ? "fresh-row" : undefined}
       style={{
         display: "grid",
@@ -521,7 +587,7 @@ function ICMRow({
         className="mono"
         style={{
           fontSize: 12,
-          color: "var(--ink-3)",
+          color: m.messageId ? "var(--accent, var(--ink-2))" : "var(--ink-3)",
           overflow: "hidden",
           textOverflow: "ellipsis",
           whiteSpace: "nowrap",

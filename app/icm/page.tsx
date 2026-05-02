@@ -218,7 +218,7 @@ function ICMRow({
       </td>
       <td>
         {m.messageId ? (
-          <Hash value={m.messageId} length={10} tone="plain" />
+          <Hash value={m.messageId} length={10} tone="link" href={`/icm/${m.messageId}`} />
         ) : (
           <span className="mono" style={{ fontSize: 11.5, color: "var(--ink-4)" }}>
             —
