@@ -124,7 +124,7 @@ export default function ICMPage() {
 
       {error ? <ErrorBanner title="Couldn't load ICM messages" message={error.message} /> : null}
 
-      <div className="card border border-line rounded-[10px] bg-bg-elev">
+      <div className="card border border-line rounded-[10px] bg-bg-elev overflow-x-auto">
         <table className="lat-tbl">
           <thead>
             <tr>
@@ -135,8 +135,10 @@ export default function ICMPage() {
                 Event
               </SortableTh>
               <th>Message ID</th>
-              <th style={{ width: 240 }}>Source → Destination</th>
-              <th>Tx</th>
+              <th className="hidden md:table-cell" style={{ width: 240 }}>
+                Source → Destination
+              </th>
+              <th className="hidden md:table-cell">Tx</th>
               <SortableTh<SortKey>
                 k="block"
                 active={sort}
@@ -211,10 +213,10 @@ function ICMRow({
           </span>
         )}
       </td>
-      <td>
+      <td className="hidden md:table-cell">
         <DirectionCell direction={direction} />
       </td>
-      <td>
+      <td className="hidden md:table-cell">
         <Hash
           value={m.transactionHash}
           length={8}

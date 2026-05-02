@@ -235,7 +235,7 @@ export default function Home() {
               </span>
             </div>
             <span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>
-              {paused.blocks ? "click to inspect" : "via WebSocket"}
+              {paused.blocks ? "click to inspect" : "live"}
             </span>
           </div>
           <div>
@@ -345,7 +345,7 @@ export default function Home() {
             </Link>
           </div>
           <div
-            className="card border border-line rounded-[10px] bg-bg-elev"
+            className="card border border-line rounded-[10px] bg-bg-elev overflow-x-auto"
             style={{ padding: "8px 0" }}
           >
             {icmMessages.map((m, i, arr) => (
@@ -381,15 +381,20 @@ export default function Home() {
             View all →
           </Link>
         </div>
-        <div className="card border border-line rounded-[10px] bg-bg-elev" {...txsHover}>
+        <div
+          className="card border border-line rounded-[10px] bg-bg-elev overflow-x-auto"
+          {...txsHover}
+        >
           <table className="lat-tbl">
             <thead>
               <tr>
                 <th style={{ width: 72 }}>Status</th>
                 <th>Hash</th>
-                <th style={{ width: 110 }}>Method</th>
-                <th>From</th>
-                <th>To</th>
+                <th className="hidden md:table-cell" style={{ width: 110 }}>
+                  Method
+                </th>
+                <th className="hidden md:table-cell">From</th>
+                <th className="hidden md:table-cell">To</th>
                 <th style={{ textAlign: "right" }}>Value</th>
                 <th style={{ textAlign: "right", width: 70 }}>Age</th>
               </tr>
@@ -434,17 +439,17 @@ export default function Home() {
                           href={`/transactions/${t.hash}`}
                         />
                       </td>
-                      <td>
+                      <td className="hidden md:table-cell">
                         <MethodChip
                           selector={t.method.selector}
                           to={t.to}
                           firnName={t.method.name}
                         />
                       </td>
-                      <td>
+                      <td className="hidden md:table-cell">
                         <Hash value={t.from} tone="from" length={6} href={`/address/${t.from}`} />
                       </td>
-                      <td>
+                      <td className="hidden md:table-cell">
                         {t.to ? (
                           <Hash value={t.to} tone="to" length={6} href={`/address/${t.to}`} />
                         ) : (

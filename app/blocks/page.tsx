@@ -103,8 +103,8 @@ export default function BlocksPage() {
         <PauseButton feed="blocks" />
       </div>
       <div className="mb-7" style={{ fontSize: 14, color: "var(--ink-3)" }}>
-        Streamed via WebSocket directly from the indexer. Filter the visible page or pause the
-        stream while you read.
+        Live block stream from the indexer — filter the visible page or pause the stream while you
+        read.
       </div>
 
       <FilterBar
@@ -159,7 +159,7 @@ export default function BlocksPage() {
         </div>
       ) : null}
 
-      <div className="card border border-line rounded-[10px] bg-bg-elev">
+      <div className="card border border-line rounded-[10px] bg-bg-elev overflow-x-auto">
         <table className="lat-tbl">
           <thead>
             <tr>
@@ -170,10 +170,22 @@ export default function BlocksPage() {
               <SortableTh<SortKey> k="txns" active={sort} onSort={setSort} align="right" width={80}>
                 Txns
               </SortableTh>
-              <SortableTh<SortKey> k="gas" active={sort} onSort={setSort} align="right" width={140}>
+              <SortableTh<SortKey>
+                k="gas"
+                active={sort}
+                onSort={setSort}
+                align="right"
+                width={140}
+                className="hidden md:table-cell"
+              >
                 Gas used
               </SortableTh>
-              <SortableTh<SortKey> k="validator" active={sort} onSort={setSort}>
+              <SortableTh<SortKey>
+                k="validator"
+                active={sort}
+                onSort={setSort}
+                className="hidden md:table-cell"
+              >
                 Validator
               </SortableTh>
               <SortableTh<SortKey> k="age" active={sort} onSort={setSort} align="right" width={100}>
@@ -213,10 +225,10 @@ export default function BlocksPage() {
                   <td className="mono" style={{ textAlign: "right", color: "var(--ink-2)" }}>
                     {block.transactionsCount}
                   </td>
-                  <td className="mono" style={{ textAlign: "right" }}>
+                  <td className="mono hidden md:table-cell" style={{ textAlign: "right" }}>
                     {formatNumber(block.gas.used)}
                   </td>
-                  <td>
+                  <td className="hidden md:table-cell">
                     {block.miner ? (
                       <Hash
                         value={block.miner}
