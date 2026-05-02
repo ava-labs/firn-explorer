@@ -127,6 +127,56 @@ export function formatCompactUnits(
   }
 }
 
+/**
+ * Gas-used percentage for a block. Returns `0` for invalid input rather
+ * than throwing — callers thread this directly into row UI where a
+ * silent zero is preferable to a layout-breaking exception.
+ */
+export function gasUsedPctNum(used: string, limit: string): number {
+  try {
+    const u = BigInt(used);
+    const l = BigInt(limit);
+    if (l === 0n) return 0;
+    return Number((u * 10000n) / l) / 100;
+  } catch {
+    return 0;
+  }
+}
+
+/** String-formatted version of `gasUsedPctNum` — drops the decimal at >=10%. */
+export function gasUsedPct(used: string, limit: string): string {
+  const n = gasUsedPctNum(used, limit);
+  return `${n.toFixed(n >= 10 ? 0 : 1)}%`;
+}
+
+/** Same shape as `gasUsedPct` but takes the firn `BlockGas`-shaped object directly. */
+export function gasUtilization(gas: { limit: string; used: string }): string {
+  return gasUsedPct(gas.used, gas.limit);
+}
+
+/**
+ * Compute and format the wei fee paid by a transaction. Mirrors the
+ * common formula `gasPrice * gasUsed`, then runs through
+ * `formatNativeAmount` for unit-aware display. Used on block detail and
+ * transaction detail.
+ */
+export function formatTxFee(gasUsed: number, gasPriceWei: string, symbol: string): string {
+  try {
+    const wei = BigInt(gasPriceWei) * BigInt(gasUsed);
+    return formatNativeAmount(wei.toString(), symbol);
+  } catch {
+    return "—";
+  }
+}
+
+/** Render a millisecond block time as `<n> ms` or `<n.nn> s`. */
+export function formatBlockTime(ms: number): string {
+  if (ms < 0) return "—";
+  if (ms < 1000) return `${ms} ms`;
+  const s = ms / 1000;
+  return `${s.toFixed(s < 10 ? 2 : 1)} s`;
+}
+
 export function formatRelativeTime(iso: string | null | undefined): string {
   if (!iso) return "—";
   const t = Date.parse(iso);

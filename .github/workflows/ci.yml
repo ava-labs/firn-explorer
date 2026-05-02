@@ -38,8 +38,14 @@ jobs:
       # see eslint-rules/enforce-network-query-key.js for the rationale
       # and `/* network-agnostic */` opt-out for legitimately-global
       # queries (Sourcify, openchain.xyz, 4byte.directory).
+      #
+      # --max-warnings=0 means new warnings block merge — the baseline
+      # is clean as of chore/lint-enforcement, and we want it to stay
+      # that way. If a legitimately-architectural pattern trips a rule
+      # (RAF-driven refs-in-render in sparkline / page address-delta),
+      # add a focused eslint-disable with a one-line rationale.
       - name: Lint
-        run: pnpm lint
+        run: pnpm exec eslint . --max-warnings=0
 
       # Prettier is a separate enforcement loop from ESLint —
       # eslint-config-prettier disables conflicting rules so the two

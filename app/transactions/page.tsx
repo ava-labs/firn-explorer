@@ -2,12 +2,14 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useTransactions, useChain } from "@/lib/api/queries";
 import { Hash } from "@/components/lattice/hash";
 import { Chip } from "@/components/lattice/chip";
 import { MethodChip } from "@/components/lattice/method-chip";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PauseButton } from "@/components/lattice/pause-button";
+import { ErrorBanner } from "@/components/page/error-banner";
 import { FilterBar, FilterInput, FilterPillGroup } from "@/components/lattice/filter-bar";
 import {
   SortableTh,
@@ -123,22 +125,7 @@ export default function TransactionsPage() {
         />
       </FilterBar>
 
-      {error ? (
-        <div
-          className="border rounded-md p-4 mb-6"
-          style={{
-            borderColor: "var(--accent-soft)",
-            background: "var(--accent-soft)",
-            color: "var(--accent-ink)",
-            fontSize: 13,
-          }}
-        >
-          <div style={{ fontWeight: 500, marginBottom: 4 }}>Couldn&apos;t load transactions</div>
-          <div className="mono" style={{ fontSize: 11.5, color: "var(--ink-3)" }}>
-            {error.message}
-          </div>
-        </div>
-      ) : null}
+      {error ? <ErrorBanner title="Couldn't load transactions" message={error.message} /> : null}
 
       <div className="card border border-line rounded-[10px] bg-bg-elev">
         <table className="lat-tbl">
@@ -208,9 +195,13 @@ export default function TransactionsPage() {
                     {t.to ? (
                       <Hash value={t.to} tone="to" length={6} href={`/address/${t.to}`} />
                     ) : (
-                      <span className="mono" style={{ fontSize: 11.5, color: "var(--ink-4)" }}>
-                        create
-                      </span>
+                      <Link
+                        href={`/transactions/${t.hash}`}
+                        onClick={(e) => e.stopPropagation()}
+                        style={{ textDecoration: "none" }}
+                      >
+                        <Chip tone="steel">Contract creation</Chip>
+                      </Link>
                     )}
                   </td>
                   <td className="mono" style={{ textAlign: "right", color: "var(--ink)" }}>

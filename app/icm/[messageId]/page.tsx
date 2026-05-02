@@ -27,6 +27,7 @@ import { Chip } from "@/components/lattice/chip";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CopyButton } from "@/components/lattice/copy-button";
 import { VerifiedContractChip } from "@/components/lattice/verified-chip";
+import { ErrorBanner } from "@/components/page/error-banner";
 import { useICMMessages, useChain } from "@/lib/api/queries";
 import type {
   AppMessage,
@@ -114,14 +115,7 @@ export default function ICMMessageDetailPage({ params }: PageProps) {
           on after the headline. */}
       {sides ? <SidesCard sides={sides} /> : null}
 
-      {error ? (
-        <div className="border rounded-md p-4 mb-6 text-sm" style={errorBoxStyle}>
-          <div style={{ fontWeight: 500 }}>Couldn&apos;t load this message.</div>
-          <div className="mono" style={{ fontSize: 11.5, color: "var(--ink-3)", marginTop: 4 }}>
-            {error.message}
-          </div>
-        </div>
-      ) : null}
+      {error ? <ErrorBanner title="Couldn't load this message." message={error.message} /> : null}
 
       <div className="eyebrow mb-3" style={{ marginTop: 32 }}>
         Timeline · {events ? `${events.length} event${events.length === 1 ? "" : "s"}` : "—"}
@@ -922,9 +916,3 @@ function byteLengthOfHex(hex: string): number {
   const h = hex.startsWith("0x") ? hex.slice(2) : hex;
   return h.length / 2;
 }
-
-const errorBoxStyle: React.CSSProperties = {
-  borderColor: "var(--accent-soft)",
-  background: "var(--accent-soft)",
-  color: "var(--accent-ink)",
-};

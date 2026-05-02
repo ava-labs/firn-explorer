@@ -4,6 +4,8 @@ import { use, useState } from "react";
 import Link from "next/link";
 import { Hash } from "@/components/lattice/hash";
 import { Chip } from "@/components/lattice/chip";
+import { Tabs } from "@/components/lattice/tabs";
+import { KpiCell } from "@/components/page/kpi-cell";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   useChain,
@@ -110,7 +112,9 @@ export default function TokenDetailPage({ params }: { params: Promise<{ hash: st
           margin: "32px 0",
         }}
       >
-        <Kpi
+        <KpiCell
+          valueSize={24}
+          divider
           label="Total supply"
           value={
             tokenPending
@@ -121,17 +125,23 @@ export default function TokenDetailPage({ params }: { params: Promise<{ hash: st
           }
           sub={`decimals: ${decimals}`}
         />
-        <Kpi
+        <KpiCell
+          valueSize={24}
+          divider
           label="Holders"
           value={tokenPending ? null : formatNumber(token?.holders ?? 0)}
           sub="distinct addrs in Transfer logs"
         />
-        <Kpi
+        <KpiCell
+          valueSize={24}
+          divider
           label="Transfers"
           value={tokenPending ? null : formatNumber(token?.transferCount ?? 0)}
           sub="total Transfer events"
         />
-        <Kpi
+        <KpiCell
+          valueSize={24}
+          divider
           label="First seen"
           value={tokenPending ? null : `#${formatNumber(token?.firstSeenBlock ?? 0)}`}
           sub="block of first Transfer"
@@ -139,23 +149,15 @@ export default function TokenDetailPage({ params }: { params: Promise<{ hash: st
       </div>
 
       {/* Tabs */}
-      <div className="lat-tabs">
-        {(
-          [
-            { id: "transfers", label: "Transfers" },
-            { id: "holders", label: "Holders" },
-            { id: "contract", label: "Contract" },
-          ] as ReadonlyArray<{ id: TabId; label: string }>
-        ).map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={`lat-tab ${tab === t.id ? "active" : ""}`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <Tabs
+        active={tab}
+        onChange={(id) => setTab(id as TabId)}
+        tabs={[
+          { id: "transfers", label: "Transfers" },
+          { id: "holders", label: "Holders" },
+          { id: "contract", label: "Contract" },
+        ]}
+      />
 
       {tab === "transfers" && (
         <TransfersTable address={hash} symbol={token?.symbol} decimals={decimals} />
@@ -178,25 +180,6 @@ export default function TokenDetailPage({ params }: { params: Promise<{ hash: st
           sourceCount={src?.sources?.length ?? 0}
         />
       )}
-    </div>
-  );
-}
-
-function Kpi({ label, value, sub }: { label: string; value: string | null; sub: string }) {
-  return (
-    <div
-      style={{
-        padding: "20px 18px",
-        borderRight: "1px solid var(--line)",
-      }}
-    >
-      <div className="eyebrow mb-2.5">{label}</div>
-      <div className="h-display" style={{ fontSize: 24 }}>
-        {value === null ? <Skeleton className="h-[24px] w-[120px]" /> : value}
-      </div>
-      <div className="mono" style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 4 }}>
-        {sub}
-      </div>
     </div>
   );
 }
