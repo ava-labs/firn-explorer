@@ -32,6 +32,9 @@ export interface ExplorerTPS {
 
 export interface ExplorerStats extends Stats {
   tps: ExplorerTPS;
+  /** Gas-utilization series (0–100% of block gas limit). Same shape as
+   *  TPS. Frontend toggles between the two on the home chart. */
+  gasUtilization: ExplorerTPS;
 }
 
 export interface ExplorerBootstrap {
@@ -63,6 +66,8 @@ export interface ExplorerFeedTick {
   icm: ICMMessage[];
   /** Single new TPS sample. Server-smoothed; client doesn't EMA. */
   tpsPoint: number;
+  /** Single new gas-utilization sample (0–100). Same cadence as tpsPoint. */
+  gasPoint: number;
   statsDelta?: ExplorerStatsDelta;
   /** Hashes to drop on reorg. Empty today, forward-compatible. */
   removedTxs: string[];
@@ -95,10 +100,21 @@ export function useExplorerBootstrap(opts?: QueryOpts<ExplorerBootstrap>) {
  * non-null shapes the components were written against.
  */
 function normalizeBootstrap(b: GeneratedExplorerBootstrap): ExplorerBootstrap {
+  // Gas series rides parallel to TPS in the spec; older firn deployments
+  // that predate the field land here as undefined — fall back to a
+  // zero-padded array so the chart stays mounted instead of unmounting
+  // on a stale backend.
+  const gas =
+    (b.stats as { gasUtilization?: ExplorerTPS }).gasUtilization ??
+    ({
+      cadence: "block",
+      windowSize: b.stats.tps?.windowSize ?? 50,
+      points: new Array(b.stats.tps?.points?.length ?? 50).fill(0),
+    } satisfies ExplorerTPS);
   return {
     tick: b.tick,
     chain: b.chain,
-    stats: { ...b.stats, tps: b.stats.tps as ExplorerTPS },
+    stats: { ...b.stats, tps: b.stats.tps as ExplorerTPS, gasUtilization: gas },
     blocks: b.blocks ?? [],
     transactions: b.transactions ?? [],
     icmMessages: (b.icmMessages ?? []) as ICMMessage[],
@@ -225,6 +241,14 @@ function mergeTickIntoBootstrap(
       ...prev.stats.tps.points.slice(advance),
       ...new Array(advance).fill(tick.tpsPoint),
     ].slice(-prev.stats.tps.windowSize);
+    // Gas series rolls in lockstep with TPS — same advance, same window.
+    // Tolerate older firn that doesn't ship gasPoint by holding the last
+    // sample so the chart doesn't stutter to zero.
+    const gasPrev = prev.stats.gasUtilization;
+    const gasNew = tick.gasPoint ?? gasPrev.points[gasPrev.points.length - 1] ?? 0;
+    const gasPoints = [...gasPrev.points.slice(advance), ...new Array(advance).fill(gasNew)].slice(
+      -gasPrev.windowSize,
+    );
 
     const next: ExplorerBootstrap = {
       ...prev,
@@ -251,6 +275,10 @@ function mergeTickIntoBootstrap(
         tps: {
           ...prev.stats.tps,
           points: tpsPoints,
+        },
+        gasUtilization: {
+          ...gasPrev,
+          points: gasPoints,
         },
       },
     };

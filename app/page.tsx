@@ -90,6 +90,7 @@ export default function Home() {
   const txs = bootstrap?.transactions;
   const icmMessages = bootstrap?.icmMessages;
   const tpsSeries = bootstrap?.stats.tps.points;
+  const gasSeries = bootstrap?.stats.gasUtilization.points;
 
   const localChainId = chain?.blockchainId;
   const freshIcm = useFreshKeys(icmMessages, (m) => `${m.transactionHash}-${m.logIndex}`, 1600);
@@ -192,13 +193,15 @@ export default function Home() {
             />
           </div>
 
-          {/* Throughput sparkline — server-computed TPS series, oldest →
-              newest. No client EMA, no per-render block-time division —
-              the bootstrap response (and each SSE tick) already deliver
-              a stable, smoothed point per slot. */}
+          {/* Gas utilization sparkline — server-computed series of
+              rolling-average gas % per block, oldest → newest. Honest
+              saturation signal: survives ACP-226 dynamic block cadence
+              and isn't gameable by spam (TPS is). The ceiling reads as
+              "approaching block gas limit" rather than "spam workload
+              looks like real workload". */}
           <div style={{ marginTop: 28 }}>
-            {tpsSeries && tpsSeries.length >= 2 ? (
-              <Sparkline fluid width={620} height={68} data={tpsSeries} />
+            {gasSeries && gasSeries.length >= 2 ? (
+              <Sparkline fluid width={620} height={68} data={gasSeries} />
             ) : (
               <Skeleton className="h-[68px] w-full" />
             )}
@@ -207,13 +210,16 @@ export default function Home() {
               style={{ gridTemplateColumns: "1fr auto 1fr" }}
             >
               <span className="eyebrow" style={{ textAlign: "left" }}>
-                {tpsSeries?.length ? `Last ${tpsSeries.length} blocks` : "—"}
+                {gasSeries?.length ? `Last ${gasSeries.length} blocks` : "—"}
               </span>
               <span className="eyebrow" style={{ textAlign: "center" }}>
-                Transactions per second
+                Block gas utilization
               </span>
               <span className="eyebrow" style={{ textAlign: "right", color: "var(--ink-3)" }}>
-                Now · {tps ?? "—"}
+                Now ·{" "}
+                {gasSeries && gasSeries.length > 0
+                  ? `${Math.round(gasSeries[gasSeries.length - 1])}%`
+                  : "—"}
               </span>
             </div>
           </div>
