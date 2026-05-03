@@ -19,7 +19,7 @@ export function ChartCard({
   title,
   unit,
   series,
-  color = "var(--accent)",
+  color = "var(--good)",
   yMax,
 }: {
   title: string;

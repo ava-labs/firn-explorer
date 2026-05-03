@@ -119,46 +119,63 @@ export function Sparkline({
   const dotX = Math.max(0, Math.min(width, lastX));
   const dotY = Math.max(0, Math.min(height, lastY));
 
+  // The cursor dot is rendered as a positioned HTML element OUTSIDE the
+  // SVG so it stays a true circle. With `fluid`, the SVG uses
+  // preserveAspectRatio="none" (so the path stretches to fill any
+  // container width) and there is no SVG equivalent of
+  // `vector-effect: non-scaling-stroke` for `<circle>` — a 5-radius
+  // circle in viewBox space becomes a wide oval after the horizontal
+  // stretch. Putting the dot in HTML, positioned at right:0 (last
+  // sample's x is always at viewBox width) and top:lastY (height is
+  // unstretched in px), keeps it pixel-perfect at every container
+  // width. lastY is in viewBox units which equal pixels because
+  // height passes through unchanged.
+  void dotX; // last-sample x is the right edge, no need to compute
+
   return (
-    <svg
-      width={fluid ? "100%" : width}
-      height={height}
-      viewBox={`0 0 ${width} ${height}`}
-      preserveAspectRatio={fluid ? "none" : "xMidYMid meet"}
-      className="block"
-      aria-hidden
-      style={{ overflow: "visible" }}
-    >
-      {area ? <path d={dArea} fill={color} opacity={areaOpacity} /> : null}
-      <path
-        d={d}
-        stroke={color}
-        strokeWidth={strokeWidth ?? 1.6}
-        fill="none"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        vectorEffect={fluid ? "non-scaling-stroke" : undefined}
+    <div className="block" style={{ position: "relative", width: fluid ? "100%" : width, height }}>
+      <svg
+        width={fluid ? "100%" : width}
+        height={height}
+        viewBox={`0 0 ${width} ${height}`}
+        preserveAspectRatio={fluid ? "none" : "xMidYMid meet"}
+        className="block"
+        aria-hidden
+        style={{ overflow: "visible" }}
+      >
+        {area ? <path d={dArea} fill={color} opacity={areaOpacity} /> : null}
+        <path
+          d={d}
+          stroke={color}
+          strokeWidth={strokeWidth ?? 1.6}
+          fill="none"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          vectorEffect={fluid ? "non-scaling-stroke" : undefined}
+        />
+      </svg>
+      <span
+        aria-hidden
+        className="sparkline-cursor"
+        style={
+          {
+            position: "absolute",
+            right: 0,
+            top: dotY,
+            width: 8,
+            height: 8,
+            marginTop: -4,
+            marginRight: -4,
+            borderRadius: 999,
+            background: color,
+            // CSS variable consumed by the pulse-cursor keyframe so the
+            // halo color matches whatever `color` the caller passed —
+            // default --good for throughput, gasUtilTone for gas, etc.
+            "--sparkline-cursor-color": color,
+          } as React.CSSProperties
+        }
       />
-      <circle cx={dotX} cy={dotY} r={5} fill={color} opacity={0.3}>
-        <animate
-          attributeName="r"
-          values="5;11;5"
-          dur="1.6s"
-          repeatCount="indefinite"
-          calcMode="spline"
-          keySplines="0.4 0 0.6 1; 0.4 0 0.6 1"
-        />
-        <animate
-          attributeName="opacity"
-          values="0.5;0;0.5"
-          dur="1.6s"
-          repeatCount="indefinite"
-          calcMode="spline"
-          keySplines="0.4 0 0.6 1; 0.4 0 0.6 1"
-        />
-      </circle>
-      <circle cx={dotX} cy={dotY} r={3.5} fill={color} />
-    </svg>
+    </div>
   );
 }
 

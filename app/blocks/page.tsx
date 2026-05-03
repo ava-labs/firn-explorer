@@ -219,7 +219,7 @@ export default function BlocksPage() {
               : "var(--accent)"
           }
         />
-        <ChartCard title="Throughput" unit="tx/s" series={tpsSeries} color="var(--accent)" />
+        <ChartCard title="Throughput" unit="tx/s" series={tpsSeries} color="var(--good)" />
       </div>
 
       <FilterBar
