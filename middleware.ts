@@ -16,7 +16,7 @@ const TENANT_HOST_RE = /^([123456789abcdefghijkmnpqrstuvwxyz]{8})\.firn\.gg$/i;
 
 const TENANT_API_PREFIX = "/api/firn/tenant/";
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const host = (request.headers.get("host") ?? "").split(":")[0]; // strip :port for dev
   const m = host.match(TENANT_HOST_RE);
   const slug = m ? m[1].toLowerCase() : null;
@@ -29,7 +29,7 @@ export function middleware(request: NextRequest) {
         { status: 400 },
       );
     }
-    const tenant = lookupTenant(slug);
+    const tenant = await lookupTenant(slug);
     if (!tenant) {
       return NextResponse.json(
         { error: `no tenant configured for slug "${slug}"` },
@@ -45,7 +45,7 @@ export function middleware(request: NextRequest) {
   // up the tenant identity and pass it down to the NetworkProvider. This
   // is what makes the SSR'd HTML render in tenant mode (no flicker).
   if (slug) {
-    const tenant = lookupTenant(slug);
+    const tenant = await lookupTenant(slug);
     const headers = new Headers(request.headers);
     headers.set("x-firn-tenant-slug", slug);
     if (tenant) {
