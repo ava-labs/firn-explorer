@@ -312,11 +312,14 @@
 
   .live-dot {
     display: inline-block;
-    width: 7px;
-    height: 7px;
+    width: 6px;
+    height: 6px;
     border-radius: 999px;
     background: var(--good);
     animation: pulse-ring 1.6s ease-out infinite;
+    /* The dot itself is a hard edge — flag-of-presence, not glow. The
+       halo is the box-shadow ring animated below. */
+    flex: none;
   }
 
   .page-fade {
@@ -420,11 +423,17 @@
 }
 
 @keyframes pulse-ring {
+  /* Ring the dot like a sonar ping. CSS interpolates color through
+     RGBA, so animating from `var(--good)` to `transparent` (which is
+     rgba(0,0,0,0)) walks through MUDDY DARK shades at the midpoint
+     and reads as a blurry wide halo. Stay in the same hue by mixing
+     --good with transparent at both ends — only the alpha changes,
+     never the color. */
   0% {
-    box-shadow: 0 0 0 0 var(--good);
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--good) 50%, transparent);
   }
   100% {
-    box-shadow: 0 0 0 8px transparent;
+    box-shadow: 0 0 0 5px color-mix(in oklab, var(--good) 0%, transparent);
   }
 }
 
