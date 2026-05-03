@@ -11,7 +11,9 @@ import {
 } from "@/lib/api/queries";
 import { Hash } from "@/components/lattice/hash";
 import { Chip } from "@/components/lattice/chip";
+import { GenesisChip } from "@/components/lattice/genesis-chip";
 import { MethodChip } from "@/components/lattice/method-chip";
+import { isGenesisTx } from "@/lib/genesis";
 import { Tabs } from "@/components/lattice/tabs";
 import { DetailRow } from "@/components/page/detail-row";
 import { ErrorBanner } from "@/components/page/error-banner";
@@ -283,7 +285,11 @@ export default function BlockDetailPage({ params }: { params: Promise<{ id: stri
                       <MethodChip selector={t.method.selector} to={t.to} firnName={t.method.name} />
                     </td>
                     <td>
-                      <Hash value={t.from} tone="from" length={8} href={`/address/${t.from}`} />
+                      {isGenesisTx(t) ? (
+                        <GenesisChip />
+                      ) : (
+                        <Hash value={t.from} tone="from" length={8} href={`/address/${t.from}`} />
+                      )}
                     </td>
                     <td>
                       {t.to ? (

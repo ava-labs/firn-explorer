@@ -6,11 +6,13 @@ import { useChain, useTransaction } from "@/lib/api/queries";
 import type { Log, Trace, Transaction } from "@/lib/api/queries";
 import { Hash } from "@/components/lattice/hash";
 import { Chip } from "@/components/lattice/chip";
+import { GenesisChip } from "@/components/lattice/genesis-chip";
 import { MethodChip } from "@/components/lattice/method-chip";
 import { Tabs } from "@/components/lattice/tabs";
 import { DetailRow } from "@/components/page/detail-row";
 import { NotFoundDetail } from "@/components/page/not-found-detail";
 import { Skeleton } from "@/components/ui/skeleton";
+import { GENESIS_HREF, ZERO_HASH32, isGenesisTx } from "@/lib/genesis";
 import {
   formatGwei,
   formatNativeAmount,
@@ -21,23 +23,17 @@ import {
 
 type TabId = "overview" | "logs" | "trace" | "raw";
 
-// 32-byte all-zeros — appears in places like ERC-20 Transfer(from=0x0..)
-// (mints) where the "from" or "to" log topic is the null sentinel rather
-// than a real txn hash. Visiting this address as a tx is a meaningful
-// user intent ("show me where this comes from") and we route it to
-// genesis since that's the chain's actual zero-state.
-const ZERO_HASH32 = "0x" + "0".repeat(64);
-
 export default function TransactionDetailPage({ params }: { params: Promise<{ hash: string }> }) {
   const { hash } = use(params);
-  const isGenesisRef = hash.toLowerCase() === ZERO_HASH32;
-  const { data: tx, isPending, error } = useTransaction(isGenesisRef ? undefined : hash);
+  const isZeroHashRef = hash.toLowerCase() === ZERO_HASH32;
+  const { data: tx, isPending, error } = useTransaction(isZeroHashRef ? undefined : hash);
   const { data: chain } = useChain();
   const [tab, setTab] = useState<TabId>("overview");
 
   const symbol = chain?.nativeToken.symbol ?? "";
+  const isGenesis = tx ? isGenesisTx(tx) : false;
 
-  if (isGenesisRef) {
+  if (isZeroHashRef) {
     return (
       <div className="px-4 sm:px-6 lg:px-10 py-6 sm:py-8 pb-12 max-w-[1080px] mx-auto">
         <div className="eyebrow mb-2.5">Genesis reference</div>
@@ -84,7 +80,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ ha
 
   return (
     <div className="px-4 sm:px-6 lg:px-10 py-6 sm:py-8 pb-12 max-w-[1080px] mx-auto">
-      <div className="eyebrow mb-2.5">Transaction</div>
+      <div className="eyebrow mb-2.5">{isGenesis ? "Genesis transaction" : "Transaction"}</div>
 
       {/* Headline */}
       <div className="flex items-start gap-3.5 mb-[22px] flex-wrap">
@@ -178,6 +174,38 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ ha
         ) : null}
       </div>
 
+      {isGenesis ? (
+        <div
+          className="card rounded-[10px]"
+          style={{
+            padding: "18px 22px",
+            marginBottom: 28,
+            border: "1px solid var(--accent-ink)",
+            background: "color-mix(in srgb, var(--accent-ink) 6%, var(--bg-elev))",
+          }}
+        >
+          <div className="eyebrow" style={{ marginBottom: 8, color: "var(--accent-ink)" }}>
+            Genesis context
+          </div>
+          <div style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.55, marginBottom: 10 }}>
+            This transaction is a synthetic record from the chain&rsquo;s genesis state — emitted by
+            firn&rsquo;s seeder to represent a pre-deployed contract or initial allocation rather
+            than a real signed transaction.
+          </div>
+          <Link
+            href={GENESIS_HREF}
+            style={{
+              fontSize: 13,
+              color: "var(--accent-ink)",
+              textDecoration: "underline",
+              textUnderlineOffset: 4,
+            }}
+          >
+            View full genesis state →
+          </Link>
+        </div>
+      ) : null}
+
       {/* Tabs */}
       <Tabs
         active={tab}
@@ -246,13 +274,17 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ ha
                 </span>
               </DetailRow>
               <DetailRow label="From">
-                <Hash
-                  value={tx.from}
-                  tone="link"
-                  length={0}
-                  href={`/address/${tx.from}`}
-                  showCopy
-                />
+                {isGenesis ? (
+                  <GenesisChip />
+                ) : (
+                  <Hash
+                    value={tx.from}
+                    tone="link"
+                    length={0}
+                    href={`/address/${tx.from}`}
+                    showCopy
+                  />
+                )}
               </DetailRow>
               <DetailRow label="Interaction">
                 {tx.to ? (

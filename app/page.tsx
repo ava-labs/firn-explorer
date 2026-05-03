@@ -5,7 +5,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Hash } from "@/components/lattice/hash";
 import { Chip } from "@/components/lattice/chip";
+import { GenesisChip } from "@/components/lattice/genesis-chip";
 import { MethodChip } from "@/components/lattice/method-chip";
+import { isGenesisTx } from "@/lib/genesis";
 import { AnimatedNumber } from "@/components/lattice/animated-number";
 import { Sparkline } from "@/components/lattice/sparkline";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -528,7 +530,11 @@ export default function Home() {
                         />
                       </td>
                       <td className="hidden md:table-cell">
-                        <Hash value={t.from} tone="from" length={6} href={`/address/${t.from}`} />
+                        {isGenesisTx(t) ? (
+                          <GenesisChip />
+                        ) : (
+                          <Hash value={t.from} tone="from" length={6} href={`/address/${t.from}`} />
+                        )}
                       </td>
                       <td className="hidden md:table-cell">
                         {t.to ? (

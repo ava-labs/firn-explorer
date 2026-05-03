@@ -6,7 +6,9 @@ import Link from "next/link";
 import { useTransactions, useChain } from "@/lib/api/queries";
 import { Hash } from "@/components/lattice/hash";
 import { Chip } from "@/components/lattice/chip";
+import { GenesisChip } from "@/components/lattice/genesis-chip";
 import { MethodChip } from "@/components/lattice/method-chip";
+import { isGenesisTx } from "@/lib/genesis";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PauseButton } from "@/components/lattice/pause-button";
 import { ErrorBanner } from "@/components/page/error-banner";
@@ -195,7 +197,11 @@ export default function TransactionsPage() {
                     <MethodChip selector={t.method.selector} to={t.to} firnName={t.method.name} />
                   </td>
                   <td className="hidden md:table-cell">
-                    <Hash value={t.from} tone="from" length={6} href={`/address/${t.from}`} />
+                    {isGenesisTx(t) ? (
+                      <GenesisChip />
+                    ) : (
+                      <Hash value={t.from} tone="from" length={6} href={`/address/${t.from}`} />
+                    )}
                   </td>
                   <td className="hidden md:table-cell">
                     {t.to ? (
