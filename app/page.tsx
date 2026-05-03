@@ -25,7 +25,7 @@ import {
 
 // On hyperscale L1s the ticker churns fast; show fewer rows so the user
 // can read individual entries instead of watching them blur past.
-const HOME_LIVE_BLOCKS = 5;
+const HOME_LIVE_BLOCKS = 6;
 const HOME_LIVE_TXS = 5;
 
 // Grace period before un-pausing a list after the cursor leaves. Without

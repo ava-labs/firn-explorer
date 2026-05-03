@@ -83,10 +83,15 @@ type QueryOpts<T> = Omit<UseQueryOptions<T, Error, T, readonly unknown[]>, "quer
  * switching back.
  */
 export function useExplorerBootstrap(opts?: QueryOpts<ExplorerBootstrap>) {
+  // Match the home page's HOME_LIVE_BLOCKS / HOME_LIVE_TXS — bigger
+  // bootstrap means the right-hand live ticker fills the chart card's
+  // height instead of running short. SSE merge preserves the panel's
+  // length cap so this only affects first paint sizing.
+  const params = { blocks: 6, txs: 5 };
   return useQuery({
-    queryKey: firnQueryKey({}, { url: getGetExplorerBootstrapUrl() }),
+    queryKey: firnQueryKey({ params }, { url: getGetExplorerBootstrapUrl(params) }),
     queryFn: ({ signal }) =>
-      getExplorerBootstrap(undefined, { signal }).then((b) =>
+      getExplorerBootstrap(params, { signal }).then((b) =>
         normalizeBootstrap(b as unknown as GeneratedExplorerBootstrap),
       ),
     refetchOnWindowFocus: false,
