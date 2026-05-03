@@ -20,7 +20,11 @@ type Pattern = {
   isHash32: boolean; // 0x + 64 hex → block or tx hash
   isAddress: boolean; // 0x + 40 hex → EVM address
   blockNumber: number | null; // pure decimal → block height
+  isGenesis: boolean; // raw matched a known genesis sentinel
 };
+
+const ZERO_HASH32 = "0x" + "0".repeat(64);
+const ZERO_ADDRESS = "0x" + "0".repeat(40);
 
 function classify(input: string): Pattern {
   const raw = input.trim();
@@ -29,7 +33,11 @@ function classify(input: string): Pattern {
   const isAddress = /^0x[0-9a-f]{40}$/.test(lower);
   const blockNumber =
     /^\d+$/.test(raw) && raw.length > 0 && raw.length < 16 ? Number.parseInt(raw, 10) : null;
-  return { raw, isHash32, isAddress, blockNumber };
+  // Genesis hits: the all-zeros 32-byte sentinel (mint-from / null tx),
+  // a literal 0 block number, or the keyword "genesis".
+  const isGenesis =
+    lower === ZERO_HASH32 || lower === ZERO_ADDRESS || lower === "genesis" || blockNumber === 0;
+  return { raw, isHash32, isAddress, blockNumber, isGenesis };
 }
 
 // ---------------------------------------------------------------------------
@@ -132,7 +140,8 @@ function SearchPageInner() {
   const totalMatches = (block ? 1 : 0) + (tx ? 1 : 0) + (address ? 1 : 0);
   const anyPending = blockPending || txPending;
   const hasInput = q.trim().length > 0;
-  const recognized = pattern.isHash32 || pattern.isAddress || pattern.blockNumber != null;
+  const recognized =
+    pattern.isHash32 || pattern.isAddress || pattern.blockNumber != null || pattern.isGenesis;
 
   return (
     <div className="px-4 sm:px-6 lg:px-10 py-6 sm:py-8 pb-12">
@@ -166,6 +175,48 @@ function SearchPageInner() {
         {/* Empty / unrecognized state */}
         {!hasInput || (!recognized && !anyPending) ? (
           <EmptyState recognized={recognized} hasInput={hasInput} />
+        ) : null}
+
+        {/* Genesis sentinel — surface block 0 for 0x0 hash, 0 address,
+            literal "genesis", or block number 0. */}
+        {pattern.isGenesis ? (
+          <section style={{ marginBottom: 36 }}>
+            <header
+              style={{
+                display: "flex",
+                alignItems: "baseline",
+                gap: 12,
+                marginBottom: 14,
+                paddingBottom: 8,
+                borderBottom: "1px solid var(--line)",
+              }}
+            >
+              <span className="eyebrow">Genesis</span>
+              <span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>
+                chain initialization
+              </span>
+            </header>
+            <Link
+              href="/blocks/0"
+              style={{
+                display: "block",
+                padding: "16px 20px",
+                border: "1px solid var(--line)",
+                borderRadius: 10,
+                background: "var(--bg-elev)",
+                textDecoration: "none",
+                color: "inherit",
+              }}
+            >
+              <div style={{ fontSize: 14, marginBottom: 4 }}>Block 0 — Genesis</div>
+              <div style={{ fontSize: 12, color: "var(--ink-3)" }}>
+                {pattern.raw.toLowerCase() === ZERO_HASH32 ||
+                pattern.raw.toLowerCase() === ZERO_ADDRESS
+                  ? "0x000…000 is the null sentinel — used in mint events and unset references. The chain's actual zero-state is the genesis block."
+                  : "View the chain's initial allocations, fee config, and fork timestamps."}
+              </div>
+            </Link>
+          </section>
         ) : null}
 
         {/* Result groups */}
