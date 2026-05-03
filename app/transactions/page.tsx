@@ -4,6 +4,8 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useTransactions, useStats, useChain } from "@/lib/api/queries";
+import { useExplorerBootstrap } from "@/lib/api/explorer";
+import { ChartCard } from "@/components/page/chart-card";
 import { Hash } from "@/components/lattice/hash";
 import { Chip } from "@/components/lattice/chip";
 import { GenesisChip } from "@/components/lattice/genesis-chip";
@@ -30,6 +32,7 @@ import {
   formatNumber,
   formatRelativeTime,
   formatTxFee,
+  gasUtilTone,
 } from "@/lib/format";
 
 type SortKey = "status" | "value" | "fee" | "block";
@@ -65,6 +68,12 @@ export default function TransactionsPage() {
   });
   const { data: chain } = useChain();
   const { data: stats } = useStats();
+  // Same series the home page chart consumes — server-smoothed, 50-block
+  // rolling window. Pulling from the bootstrap query (already cached
+  // across the app) so this page mounting doesn't fan out a new fetch.
+  const { data: bootstrap } = useExplorerBootstrap();
+  const tpsSeries = bootstrap?.stats.tps.points;
+  const gasSeries = bootstrap?.stats.gasUtilization.points;
   const txs = page?.data;
   const freshTxs = useFreshHashes(txs);
   const symbol = chain?.nativeToken.symbol ?? "—";
@@ -168,6 +177,28 @@ export default function TransactionsPage() {
           label="Success rate"
           value={successRate != null ? `${successRate.toFixed(1)}%` : null}
           sub={view ? `${formatNumber(view.length)} on this page` : ""}
+        />
+      </div>
+
+      {/* Chart strip — same primitive (Sparkline) and styling as the home
+          page so the visual language is consistent across surfaces. Both
+          series are server-smoothed in firn (rolling-average per block,
+          50-point window). On the transactions index, throughput is the
+          headline; gas pressure rides alongside as a saturation signal
+          so the user can tell whether a TPS dip is "less work coming in"
+          or "chain pegged at gas limit". */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8 mb-8">
+        <ChartCard title="Throughput" unit="tx/s" series={tpsSeries} color="var(--accent)" />
+        <ChartCard
+          title="Block gas utilization"
+          unit="%"
+          series={gasSeries}
+          yMax={100}
+          color={
+            gasSeries && gasSeries.length > 0
+              ? gasUtilTone(gasSeries[gasSeries.length - 1])
+              : "var(--accent)"
+          }
         />
       </div>
 
