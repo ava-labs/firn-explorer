@@ -21,13 +21,53 @@ import {
 
 type TabId = "overview" | "logs" | "trace" | "raw";
 
+// 32-byte all-zeros — appears in places like ERC-20 Transfer(from=0x0..)
+// (mints) where the "from" or "to" log topic is the null sentinel rather
+// than a real txn hash. Visiting this address as a tx is a meaningful
+// user intent ("show me where this comes from") and we route it to
+// genesis since that's the chain's actual zero-state.
+const ZERO_HASH32 = "0x" + "0".repeat(64);
+
 export default function TransactionDetailPage({ params }: { params: Promise<{ hash: string }> }) {
   const { hash } = use(params);
-  const { data: tx, isPending, error } = useTransaction(hash);
+  const isGenesisRef = hash.toLowerCase() === ZERO_HASH32;
+  const { data: tx, isPending, error } = useTransaction(isGenesisRef ? undefined : hash);
   const { data: chain } = useChain();
   const [tab, setTab] = useState<TabId>("overview");
 
   const symbol = chain?.nativeToken.symbol ?? "";
+
+  if (isGenesisRef) {
+    return (
+      <div className="px-4 sm:px-6 lg:px-10 py-6 sm:py-8 pb-12 max-w-[1080px] mx-auto">
+        <div className="eyebrow mb-2.5">◆ Genesis reference</div>
+        <div className="h-display mb-1" style={{ fontSize: 28 }}>
+          Block 0 — Genesis
+        </div>
+        <p className="mt-3 mb-6" style={{ color: "var(--ink-3)", fontSize: 14, maxWidth: 640 }}>
+          The hash <span className="mono">0x000…000</span> is the null sentinel — used in mint
+          events (Transfer.from=0x0) and as a placeholder for transactions that don&rsquo;t have a
+          real source. The chain&rsquo;s actual zero-state lives in the genesis block.
+        </p>
+        <div
+          className="card border border-line rounded-[10px] bg-bg-elev"
+          style={{ padding: "20px 24px", display: "flex", gap: 12, alignItems: "center" }}
+        >
+          <Link
+            href="/blocks/0"
+            className="text-sm"
+            style={{
+              color: "var(--ink-1)",
+              textDecoration: "underline",
+              textUnderlineOffset: 4,
+            }}
+          >
+            View genesis block →
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   if (error) {
     return (
