@@ -19,6 +19,7 @@ import { useQuery, type UseQueryOptions } from "@tanstack/react-query";
 import {
   getBlock as fetchBlock,
   getChain as fetchChain,
+  getGenesis as fetchGenesis,
   getProposerState as fetchProposerState,
   getTransaction as fetchTransaction,
   getValidatorUptime as fetchValidatorUptime,
@@ -40,6 +41,7 @@ import {
   getListBlocksUrl,
   getListTransactionsUrl,
   getGetChainUrl,
+  getGetGenesisUrl,
   getGetStatsUrl,
   getGetBlockUrl,
   getGetBlockTransactionsUrl,
@@ -67,6 +69,7 @@ import type {
   AddressLog as GenAddressLog,
   Block as GenBlock,
   Chain as GenChain,
+  GenesisResponse as GenGenesisResponse,
   InternalTransaction as GenInternalTransaction,
   Message as GenMessage,
   Stats as GenStats,
@@ -93,6 +96,23 @@ export type {
   Cursor,
   ErrorModel,
   GasPrice,
+  GenesisAllocation,
+  GenesisAllocationsSummary,
+  GenesisConfig,
+  GenesisConfigFeeConfig,
+  GenesisContract,
+  GenesisERC20Balance,
+  GenesisHardfork,
+  GenesisHeader,
+  GenesisPrecompile,
+  GenesisPrecompileConfig,
+  GenesisRaw,
+  GenesisResponse,
+  GenesisUpgrades,
+  GenesisUpgradesNetworkUpgrades,
+  GenesisUpgradesPrecompileUpgradesItem,
+  GenesisUpgradesRaw,
+  GenesisUpgradesStateUpgradesItem,
   InternalTransaction,
   L1Validator,
   Log,
@@ -150,6 +170,23 @@ export function useChain(opts?: QueryOpts<GenChain>) {
     queryKey: firnQueryKey({}, { url: getGetChainUrl() }),
     queryFn: ({ signal }) => fetchChain({ signal }) as unknown as Promise<GenChain>,
     staleTime: 5 * 60 * 1000,
+    ...opts,
+  });
+}
+
+/**
+ * Genesis is a static, chain-lifetime artifact — once firn has indexed
+ * it the response never changes. Cache aggressively (10 min stale,
+ * never auto-refetch) so /genesis is effectively free after first load
+ * and tab switches don't re-hit the wire.
+ */
+export function useGenesis(opts?: QueryOpts<GenGenesisResponse>) {
+  return useQuery({
+    queryKey: firnQueryKey({}, { url: getGetGenesisUrl() }),
+    queryFn: ({ signal }) => fetchGenesis({ signal }) as unknown as Promise<GenGenesisResponse>,
+    staleTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    retry: 1,
     ...opts,
   });
 }

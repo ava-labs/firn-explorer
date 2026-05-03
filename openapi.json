@@ -695,6 +695,412 @@
         ],
         "type": "object"
       },
+      "GenesisAllocation": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "balance": {
+            "type": "string"
+          },
+          "codeHash": {
+            "type": "string"
+          },
+          "codeSize": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "nonce": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "storageEntries": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "address",
+          "balance",
+          "codeSize",
+          "storageEntries",
+          "nonce"
+        ],
+        "type": "object"
+      },
+      "GenesisAllocationsSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/GenesisAllocation"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "totalCount": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "totalSupplyWei": {
+            "type": "string"
+          },
+          "withBalance": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "withCode": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "withStorage": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "totalCount",
+          "withBalance",
+          "withCode",
+          "withStorage",
+          "totalSupplyWei",
+          "data"
+        ],
+        "type": "object"
+      },
+      "GenesisConfig": {
+        "additionalProperties": false,
+        "properties": {
+          "allowFeeRecipients": {
+            "type": "boolean"
+          },
+          "chainId": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "feeConfig": {
+            "additionalProperties": {},
+            "type": "object"
+          },
+          "hardforks": {
+            "items": {
+              "$ref": "#/components/schemas/GenesisHardfork"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "precompiles": {
+            "items": {
+              "$ref": "#/components/schemas/GenesisPrecompile"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "chainId",
+          "hardforks",
+          "precompiles",
+          "allowFeeRecipients"
+        ],
+        "type": "object"
+      },
+      "GenesisContract": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "balance": {
+            "type": "string"
+          },
+          "codeHash": {
+            "type": "string"
+          },
+          "codeSize": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "isPrecompile": {
+            "type": "boolean"
+          },
+          "txHash": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "address",
+          "codeSize",
+          "codeHash",
+          "txHash",
+          "balance",
+          "isPrecompile"
+        ],
+        "type": "object"
+      },
+      "GenesisERC20Balance": {
+        "additionalProperties": false,
+        "properties": {
+          "contract": {
+            "type": "string"
+          },
+          "holder": {
+            "type": "string"
+          },
+          "slot": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "contract",
+          "holder",
+          "value",
+          "slot"
+        ],
+        "type": "object"
+      },
+      "GenesisHardfork": {
+        "additionalProperties": false,
+        "properties": {
+          "activated": {
+            "type": "boolean"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "value": {
+            "format": "int64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "kind",
+          "activated",
+          "value"
+        ],
+        "type": "object"
+      },
+      "GenesisHeader": {
+        "additionalProperties": false,
+        "properties": {
+          "coinbase": {
+            "type": "string"
+          },
+          "difficulty": {
+            "type": "string"
+          },
+          "extraData": {
+            "type": "string"
+          },
+          "gasLimit": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "hash": {
+            "type": "string"
+          },
+          "mixHash": {
+            "type": "string"
+          },
+          "nonce": {
+            "type": "string"
+          },
+          "number": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "parentHash": {
+            "type": "string"
+          },
+          "timestamp": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "number",
+          "hash",
+          "parentHash",
+          "timestamp",
+          "gasLimit",
+          "difficulty",
+          "coinbase",
+          "extraData",
+          "mixHash",
+          "nonce"
+        ],
+        "type": "object"
+      },
+      "GenesisPrecompile": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "blockTimestamp": {
+            "format": "int64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "config": {
+            "additionalProperties": {},
+            "type": "object"
+          },
+          "disable": {
+            "type": "boolean"
+          },
+          "key": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "name",
+          "address",
+          "blockTimestamp",
+          "disable",
+          "config"
+        ],
+        "type": "object"
+      },
+      "GenesisRaw": {
+        "additionalProperties": false,
+        "properties": {
+          "genesisJson": {
+            "type": "string"
+          },
+          "upgradeJson": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "genesisJson"
+        ],
+        "type": "object"
+      },
+      "GenesisResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "allocations": {
+            "$ref": "#/components/schemas/GenesisAllocationsSummary"
+          },
+          "config": {
+            "$ref": "#/components/schemas/GenesisConfig"
+          },
+          "contracts": {
+            "items": {
+              "$ref": "#/components/schemas/GenesisContract"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "erc20Balances": {
+            "items": {
+              "$ref": "#/components/schemas/GenesisERC20Balance"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "header": {
+            "$ref": "#/components/schemas/GenesisHeader"
+          },
+          "raw": {
+            "$ref": "#/components/schemas/GenesisRaw"
+          },
+          "upgrades": {
+            "$ref": "#/components/schemas/GenesisUpgrades"
+          }
+        },
+        "required": [
+          "header",
+          "config",
+          "upgrades",
+          "allocations",
+          "contracts",
+          "erc20Balances",
+          "raw"
+        ],
+        "type": "object"
+      },
+      "GenesisUpgrades": {
+        "additionalProperties": false,
+        "properties": {
+          "networkUpgrades": {
+            "additionalProperties": {},
+            "type": "object"
+          },
+          "precompileUpgrades": {
+            "items": {
+              "additionalProperties": {},
+              "type": "object"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "raw": {
+            "additionalProperties": {},
+            "type": "object"
+          },
+          "stateUpgrades": {
+            "items": {
+              "additionalProperties": {},
+              "type": "object"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "precompileUpgrades",
+          "stateUpgrades"
+        ],
+        "type": "object"
+      },
       "HealthOutputBody": {
         "additionalProperties": false,
         "properties": {
@@ -1704,6 +2110,12 @@
           "block": {
             "$ref": "#/components/schemas/BlockRef"
           },
+          "contractAddress": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "from": {
             "type": "string"
           },
@@ -1768,6 +2180,7 @@
           "block",
           "from",
           "to",
+          "contractAddress",
           "value",
           "nonce",
           "method",
@@ -2848,6 +3261,37 @@
         "summary": "Single-call composition for the explorer home page first paint",
         "tags": [
           "Explorer"
+        ]
+      }
+    },
+    "/v1/genesis": {
+      "get": {
+        "operationId": "getGenesis",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenesisResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Genesis block details: header, config, hardforks, precompiles, allocations, pre-deployed contracts, and ERC-20 storage balances",
+        "tags": [
+          "Genesis"
         ]
       }
     },

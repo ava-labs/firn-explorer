@@ -5,7 +5,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Hash } from "@/components/lattice/hash";
 import { Chip } from "@/components/lattice/chip";
+import { GenesisChip } from "@/components/lattice/genesis-chip";
 import { MethodChip } from "@/components/lattice/method-chip";
+import { isGenesisTx } from "@/lib/genesis";
 import { AnimatedNumber } from "@/components/lattice/animated-number";
 import { Sparkline } from "@/components/lattice/sparkline";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -126,8 +128,9 @@ export default function Home() {
   const blocksHover = useHoverPause("blocks");
   const txsHover = useHoverPause("transactions");
   const { paused } = useLivePause();
-  // Re-render every second so "Xs ago" labels stay current between feed ticks.
-  useNowTick(1000);
+  // Re-render at 10Hz so the "Xms ago" labels animate smoothly for the first
+  // second after a row appears, then settle into 1Hz-ish "Xs ago" updates.
+  useNowTick(100);
 
   // Address-count delta vs the value seen 60s ago. We hold a small ring
   // of {at, count} entries and pick the oldest one that's still within
@@ -528,7 +531,11 @@ export default function Home() {
                         />
                       </td>
                       <td className="hidden md:table-cell">
-                        <Hash value={t.from} tone="from" length={6} href={`/address/${t.from}`} />
+                        {isGenesisTx(t) ? (
+                          <GenesisChip />
+                        ) : (
+                          <Hash value={t.from} tone="from" length={6} href={`/address/${t.from}`} />
+                        )}
                       </td>
                       <td className="hidden md:table-cell">
                         {t.to ? (

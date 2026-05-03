@@ -246,13 +246,14 @@ export function formatRelativeTime(iso: string | null | undefined): string {
   const t = Date.parse(iso);
   if (Number.isNaN(t)) return iso;
   const diffMs = Date.now() - t;
-  const sec = Math.round(diffMs / 1000);
-  if (sec < 5) return "just now";
+  if (diffMs < 100) return "just now";
+  if (diffMs < 1000) return `${Math.floor(diffMs / 100) * 100}ms ago`;
+  const sec = Math.floor(diffMs / 1000);
   if (sec < 60) return `${sec}s ago`;
-  const min = Math.round(sec / 60);
+  const min = Math.floor(sec / 60);
   if (min < 60) return `${min}m ago`;
-  const hr = Math.round(min / 60);
+  const hr = Math.floor(min / 60);
   if (hr < 24) return `${hr}h ago`;
-  const day = Math.round(hr / 24);
+  const day = Math.floor(hr / 24);
   return `${day}d ago`;
 }

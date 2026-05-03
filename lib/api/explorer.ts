@@ -144,7 +144,7 @@ const FEED_TOPIC_PREFIXES = [
 ] as const;
 type FeedTopic = (typeof FEED_TOPIC_PREFIXES)[number];
 
-const TOPIC_THROTTLE_MS = 1500;
+const TOPIC_THROTTLE_MS = 500;
 
 function shouldSkipForPause(topic: FeedTopic, paused: LivePauseState): boolean {
   if (paused.blocks && topic === "/v1/blocks") return true;

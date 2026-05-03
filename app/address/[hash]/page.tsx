@@ -13,7 +13,9 @@ import {
 } from "@/lib/api/queries";
 import { Hash } from "@/components/lattice/hash";
 import { Chip } from "@/components/lattice/chip";
+import { GenesisChip } from "@/components/lattice/genesis-chip";
 import { MethodChip } from "@/components/lattice/method-chip";
+import { isGenesisTx } from "@/lib/genesis";
 import { Tabs, type TabItem } from "@/components/lattice/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -301,6 +303,7 @@ function TxsTab({
               txs.map((t) => {
                 const out = t.from.toLowerCase() === self;
                 const counter = out ? t.to : t.from;
+                const fromIsGenesis = isGenesisTx(t);
                 return (
                   <tr key={t.hash}>
                     <td>
@@ -323,13 +326,27 @@ function TxsTab({
                       <Chip tone={out ? "bad" : "good"}>{out ? "OUT" : "IN"}</Chip>
                     </td>
                     <td>
-                      {counter ? (
+                      {!out && fromIsGenesis ? (
+                        <GenesisChip />
+                      ) : counter ? (
                         <Hash
                           value={counter}
                           tone={out ? "to" : "from"}
                           length={0}
                           href={`/address/${counter}`}
                         />
+                      ) : t.contractAddress ? (
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                          <Hash
+                            value={t.contractAddress}
+                            tone="to"
+                            length={0}
+                            href={`/address/${t.contractAddress}`}
+                          />
+                          <span className="mono" style={{ fontSize: 10.5, color: "var(--ink-4)" }}>
+                            deployed
+                          </span>
+                        </span>
                       ) : (
                         <Link href={`/transactions/${t.hash}`} style={{ textDecoration: "none" }}>
                           <Chip tone="steel">Contract creation</Chip>

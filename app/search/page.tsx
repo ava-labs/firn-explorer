@@ -11,6 +11,7 @@ import { Hash } from "@/components/lattice/hash";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatNativeAmount, formatNumber, formatRelativeTime } from "@/lib/format";
 import { useChain } from "@/lib/api/queries";
+import { ZERO_ADDRESS, ZERO_HASH32, isGenesisRef } from "@/lib/genesis";
 
 // ---------------------------------------------------------------------------
 // Pattern detection — pure, no firn calls. Drives the dispatch fan-out below.
@@ -23,9 +24,6 @@ type Pattern = {
   isGenesis: boolean; // raw matched a known genesis sentinel
 };
 
-const ZERO_HASH32 = "0x" + "0".repeat(64);
-const ZERO_ADDRESS = "0x" + "0".repeat(40);
-
 function classify(input: string): Pattern {
   const raw = input.trim();
   const lower = raw.toLowerCase();
@@ -33,11 +31,7 @@ function classify(input: string): Pattern {
   const isAddress = /^0x[0-9a-f]{40}$/.test(lower);
   const blockNumber =
     /^\d+$/.test(raw) && raw.length > 0 && raw.length < 16 ? Number.parseInt(raw, 10) : null;
-  // Genesis hits: the all-zeros 32-byte sentinel (mint-from / null tx),
-  // a literal 0 block number, or the keyword "genesis".
-  const isGenesis =
-    lower === ZERO_HASH32 || lower === ZERO_ADDRESS || lower === "genesis" || blockNumber === 0;
-  return { raw, isHash32, isAddress, blockNumber, isGenesis };
+  return { raw, isHash32, isAddress, blockNumber, isGenesis: isGenesisRef(raw) };
 }
 
 // ---------------------------------------------------------------------------

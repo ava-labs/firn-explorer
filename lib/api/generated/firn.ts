@@ -31,6 +31,7 @@ import type {
   ComplianceStatusOutputBody,
   ErrorModel,
   ExplorerBootstrap,
+  GenesisResponse,
   GetBlockParams,
   GetBlockTransactionsParams,
   GetChainPrecompilesParams,
@@ -2434,6 +2435,120 @@ export function useGetExplorerBootstrap<TData = Awaited<ReturnType<typeof getExp
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = useGetExplorerBootstrapQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+/**
+ * @summary Genesis block details: header, config, hardforks, precompiles, allocations, pre-deployed contracts, and ERC-20 storage balances
+ */
+export type getGenesisResponse200 = {
+  data: GenesisResponse
+  status: 200
+}
+
+export type getGenesisResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type getGenesisResponseSuccess = (getGenesisResponse200) & {
+  headers: Headers;
+};
+export type getGenesisResponseError = (getGenesisResponseDefault) & {
+  headers: Headers;
+};
+
+export type getGenesisResponse = (getGenesisResponseSuccess | getGenesisResponseError)
+
+export const getGetGenesisUrl = () => {
+
+
+
+
+  return `/v1/genesis`
+}
+
+export const getGenesis = async ( options?: RequestInit): Promise<getGenesisResponse> => {
+
+  return firnFetch<getGenesisResponse>(getGetGenesisUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+
+export const useGetGenesisQueryOptions = <TData = Awaited<ReturnType<typeof getGenesis>>, TError = ErrorModel>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getGenesis>>, TError, TData>>, request?: SecondParameter<typeof firnFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  firnQueryKey({  }, { url: `/v1/genesis`, queryOptions });
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getGenesis>>> = ({ signal }) => getGenesis({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getGenesis>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetGenesisQueryResult = NonNullable<Awaited<ReturnType<typeof getGenesis>>>
+export type GetGenesisQueryError = ErrorModel
+
+
+export function useGetGenesis<TData = Awaited<ReturnType<typeof getGenesis>>, TError = ErrorModel>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getGenesis>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getGenesis>>,
+          TError,
+          Awaited<ReturnType<typeof getGenesis>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof firnFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetGenesis<TData = Awaited<ReturnType<typeof getGenesis>>, TError = ErrorModel>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getGenesis>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getGenesis>>,
+          TError,
+          Awaited<ReturnType<typeof getGenesis>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof firnFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetGenesis<TData = Awaited<ReturnType<typeof getGenesis>>, TError = ErrorModel>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getGenesis>>, TError, TData>>, request?: SecondParameter<typeof firnFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Genesis block details: header, config, hardforks, precompiles, allocations, pre-deployed contracts, and ERC-20 storage balances
+ */
+
+export function useGetGenesis<TData = Awaited<ReturnType<typeof getGenesis>>, TError = ErrorModel>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getGenesis>>, TError, TData>>, request?: SecondParameter<typeof firnFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = useGetGenesisQueryOptions(options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 
