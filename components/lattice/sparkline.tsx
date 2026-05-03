@@ -101,8 +101,10 @@ export function Sparkline({
   // Live cursor: a pulsing dot pinned to the newest sample so the eye
   // can read the current value and direction at a glance. Insetting the
   // x coordinate by the halo radius keeps the dot fully inside the
-  // overflow-hidden viewbox.
-  const dotX = Math.max(0, Math.min(width, lastX) - 5);
+  // viewbox. With overflow:visible the halo can pulse past the right
+  // edge without being clipped, so we keep dotX pinned to lastX (no
+  // inset) — eye reads the cursor as the chart's "current value" tip.
+  const dotX = Math.max(0, Math.min(width, lastX));
   const dotY = Math.max(0, Math.min(height, lastY));
 
   return (
@@ -113,7 +115,7 @@ export function Sparkline({
       preserveAspectRatio={fluid ? "none" : "xMidYMid meet"}
       className="block"
       aria-hidden
-      style={{ overflow: "hidden" }}
+      style={{ overflow: "visible" }}
     >
       {area ? <path d={dArea} fill={color} opacity={areaOpacity} /> : null}
       <path
@@ -125,10 +127,10 @@ export function Sparkline({
         strokeLinejoin="round"
         vectorEffect={fluid ? "non-scaling-stroke" : undefined}
       />
-      <circle cx={dotX} cy={dotY} r={3} fill={color} opacity={0.25}>
+      <circle cx={dotX} cy={dotY} r={5} fill={color} opacity={0.3}>
         <animate
           attributeName="r"
-          values="3;6;3"
+          values="5;11;5"
           dur="1.6s"
           repeatCount="indefinite"
           calcMode="spline"
@@ -136,14 +138,14 @@ export function Sparkline({
         />
         <animate
           attributeName="opacity"
-          values="0.45;0;0.45"
+          values="0.5;0;0.5"
           dur="1.6s"
           repeatCount="indefinite"
           calcMode="spline"
           keySplines="0.4 0 0.6 1; 0.4 0 0.6 1"
         />
       </circle>
-      <circle cx={dotX} cy={dotY} r={2} fill={color} />
+      <circle cx={dotX} cy={dotY} r={3.5} fill={color} />
     </svg>
   );
 }
