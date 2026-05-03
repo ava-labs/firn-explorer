@@ -82,7 +82,7 @@ export default function ICMMessageDetailPage({ params }: PageProps) {
     <div className="px-4 sm:px-6 lg:px-10 py-6 sm:py-8 pb-12">
       <div className="eyebrow mb-2.5">
         <Link href="/icm" style={{ color: "inherit", textDecoration: "none" }}>
-          ◆ ICM
+          ICM
         </Link>{" "}
         · Message
       </div>

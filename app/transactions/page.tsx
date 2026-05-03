@@ -88,7 +88,7 @@ export default function TransactionsPage() {
 
   return (
     <div className="px-4 sm:px-6 lg:px-10 py-6 sm:py-8 pb-12">
-      <div className="eyebrow mb-2.5">◆ Transactions</div>
+      <div className="eyebrow mb-2.5">Transactions</div>
       <div className="flex items-baseline gap-3 mb-2">
         <span className="h-display" style={{ fontSize: 56 }}>
           Latest transactions
@@ -138,8 +138,12 @@ export default function TransactionsPage() {
               <th className="hidden md:table-cell" style={{ width: 110 }}>
                 Method
               </th>
-              <th className="hidden md:table-cell">From</th>
-              <th className="hidden md:table-cell">To</th>
+              <th className="hidden md:table-cell" style={{ width: 160 }}>
+                From
+              </th>
+              <th className="hidden md:table-cell" style={{ width: 160 }}>
+                To
+              </th>
               <SortableTh<SortKey>
                 k="value"
                 active={sort}

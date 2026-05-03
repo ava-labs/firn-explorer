@@ -83,7 +83,7 @@ export default function ValidatorDetailPage({ params }: { params: Promise<{ node
     return (
       <Page>
         <BackLink />
-        <div className="eyebrow mb-2.5">◆ Validator</div>
+        <div className="eyebrow mb-2.5">Validator</div>
         <div
           className="border rounded-md p-4 mb-6 max-w-2xl"
           style={{
@@ -106,7 +106,7 @@ export default function ValidatorDetailPage({ params }: { params: Promise<{ node
     return (
       <Page>
         <BackLink />
-        <div className="eyebrow mb-2.5">◆ Validator</div>
+        <div className="eyebrow mb-2.5">Validator</div>
         <div className="flex items-center gap-3.5 mb-[22px]">
           <Skeleton className="h-6 w-72" />
         </div>
@@ -124,7 +124,7 @@ export default function ValidatorDetailPage({ params }: { params: Promise<{ node
     return (
       <Page>
         <BackLink />
-        <div className="eyebrow mb-2.5">◆ Validator</div>
+        <div className="eyebrow mb-2.5">Validator</div>
         <div className="h-display mb-2" style={{ fontSize: 32 }}>
           Not found
         </div>
@@ -163,7 +163,7 @@ export default function ValidatorDetailPage({ params }: { params: Promise<{ node
   return (
     <Page>
       <BackLink />
-      <div className="eyebrow mb-2.5">◆ Validator</div>
+      <div className="eyebrow mb-2.5">Validator</div>
 
       {/* Headline */}
       <div className="flex items-start gap-3.5 mb-[22px] flex-wrap">

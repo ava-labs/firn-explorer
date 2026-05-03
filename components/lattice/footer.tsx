@@ -13,48 +13,55 @@ function GitHubMark({ size = 14 }: { size?: number }) {
 export function Footer() {
   return (
     <footer
-      className="border-t border-line mt-12 px-4 sm:px-7 py-5 text-ink-3 flex flex-col sm:grid sm:grid-cols-[1fr_auto_1fr] gap-3 sm:gap-4 items-center text-center sm:text-left"
+      className="border-t border-line mt-12 px-4 sm:px-7 py-5 text-ink-3"
       style={{
         fontSize: 12.5,
       }}
     >
-      <span className="sm:justify-self-start">
-        Crafted with{" "}
-        <span aria-label="love" role="img" style={{ color: "var(--accent)" }}>
-          ❤️
-        </span>{" "}
-        by the Ava Labs DevRel team.
-      </span>
-      <a
-        href="https://github.com/ava-labs/firn"
-        target="_blank"
-        rel="noreferrer"
-        className="sm:justify-self-center inline-flex items-center gap-1.5"
-        style={{
-          color: "var(--ink-2)",
-          textDecoration: "none",
-          fontFamily: "var(--font-mono)",
-          fontSize: 12,
-        }}
-      >
-        <span style={{ color: "var(--ink-4)" }}>Powered by</span>
-        <GitHubMark size={14} />
-        firn ↗
-      </a>
-      <a
-        href="https://build.avax.network"
-        target="_blank"
-        rel="noreferrer"
-        className="sm:justify-self-end"
-        style={{
-          color: "var(--ink-2)",
-          textDecoration: "none",
-          fontFamily: "var(--font-mono)",
-          fontSize: 12,
-        }}
-      >
-        build.avax.network ↗
-      </a>
+      {/* Mobile: 2 stacked rows (credit on top, links inline below).
+          sm+: the inner wrapper becomes `display: contents` so the
+          anchors participate directly in the 3-column grid layout
+          alongside the credit span. */}
+      <div className="flex flex-col items-center gap-2 text-center sm:grid sm:grid-cols-[1fr_auto_1fr] sm:gap-4 sm:items-center sm:text-left">
+        <span className="sm:justify-self-start">
+          Crafted with{" "}
+          <span aria-label="love" role="img" style={{ color: "var(--accent)" }}>
+            ❤️
+          </span>{" "}
+          by the Ava Labs DevRel team.
+        </span>
+        <div
+          className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 sm:contents"
+          style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}
+        >
+          <a
+            href="https://github.com/ava-labs/firn"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1.5 sm:justify-self-center"
+            style={{
+              color: "var(--ink-2)",
+              textDecoration: "none",
+            }}
+          >
+            <span style={{ color: "var(--ink-4)" }}>Powered by</span>
+            <GitHubMark size={14} />
+            firn ↗
+          </a>
+          <a
+            href="https://build.avax.network"
+            target="_blank"
+            rel="noreferrer"
+            className="sm:justify-self-end"
+            style={{
+              color: "var(--ink-2)",
+              textDecoration: "none",
+            }}
+          >
+            build.avax.network ↗
+          </a>
+        </div>
+      </div>
     </footer>
   );
 }

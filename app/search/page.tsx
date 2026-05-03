@@ -147,7 +147,7 @@ function SearchPageInner() {
     <div className="px-4 sm:px-6 lg:px-10 py-6 sm:py-8 pb-12">
       <div className="mx-auto" style={{ maxWidth: 720 }}>
         <div className="eyebrow" style={{ marginBottom: 10 }}>
-          ◆ Search results
+          Search results
         </div>
         <div className="h-display" style={{ fontSize: 32, marginBottom: 4 }}>
           &ldquo;
@@ -437,7 +437,7 @@ function EmptyState({ recognized, hasInput }: { recognized: boolean; hasInput: b
       }}
     >
       <div className="eyebrow" style={{ marginBottom: 10, color: "var(--ink-3)" }}>
-        ◆ Searchable formats
+        Searchable formats
       </div>
       <ul
         style={{
