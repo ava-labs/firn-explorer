@@ -1,18 +1,19 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { lookupTenant } from "@/lib/api/tenants";
 
-// Tenant slugs are the lowercased first 8 chars of the L1's blockchainID
-// (base58, with `0`, `l`, `o`, `I` already excluded by the cb58 alphabet).
-// Hardcoding the alphabet + length here turns the regex itself into the
-// reservation list:
-//   • `explorer.firn.gg` → contains `l` and `o`, can't match → falls
-//     through to apex behavior (the network switcher).
-//   • `www.firn.gg`, `api.firn.gg`, etc. → wrong length, can't match.
-//   • `*.vercel.app` preview URLs → don't match `firn.gg` at all.
+// Tenant slugs are the lowercased first 8 chars of the L1's blockchainID.
+// Base58 (cb58) excludes `0`/`I`/`l`/`o` from its raw alphabet, but
+// only at specific case positions: uppercase has `L`/`O`, lowercase
+// has `i`/`o`. After lowercasing, you can produce ANY of `a-z` (plus
+// digits 1-9) — e.g., blockchainID `QRLFr3FU…` → slug `qrlfr3fu`,
+// where the `l` came from uppercase `L`. So the alphabet here must
+// be inclusive of all a-z plus 1-9 (no `0`).
 //
-// Anything that doesn't match this shape gets the apex experience —
-// no separate blocklist needed.
-const TENANT_HOST_RE = /^([123456789abcdefghijkmnpqrstuvwxyz]{8})\.firn\.gg$/i;
+// Reserved subdomains stay safe via length: `www`, `api`, `app`, etc.
+// can't match the {8} length. `explorer.firn.gg` would match by shape
+// but lookupTenant() returns null for it, so the layout falls through
+// to apex rendering anyway.
+const TENANT_HOST_RE = /^([1-9a-z]{8})\.firn\.gg$/i;
 
 const TENANT_API_PREFIX = "/api/firn/tenant/";
 
