@@ -294,6 +294,18 @@ export default function BlockDetailPage({ params }: { params: Promise<{ id: stri
                     <td>
                       {t.to ? (
                         <Hash value={t.to} tone="to" length={8} href={`/address/${t.to}`} />
+                      ) : t.contractAddress ? (
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                          <Hash
+                            value={t.contractAddress}
+                            tone="to"
+                            length={8}
+                            href={`/address/${t.contractAddress}`}
+                          />
+                          <span className="mono" style={{ fontSize: 10.5, color: "var(--ink-4)" }}>
+                            deployed
+                          </span>
+                        </span>
                       ) : (
                         <Link href={`/transactions/${t.hash}`} style={{ textDecoration: "none" }}>
                           <Chip tone="steel">Contract creation</Chip>

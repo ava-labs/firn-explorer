@@ -206,6 +206,25 @@ export default function TransactionsPage() {
                   <td className="hidden md:table-cell">
                     {t.to ? (
                       <Hash value={t.to} tone="to" length={6} href={`/address/${t.to}`} />
+                    ) : t.contractAddress ? (
+                      <span
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 6,
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Hash
+                          value={t.contractAddress}
+                          tone="to"
+                          length={6}
+                          href={`/address/${t.contractAddress}`}
+                        />
+                        <span className="mono" style={{ fontSize: 10.5, color: "var(--ink-4)" }}>
+                          deployed
+                        </span>
+                      </span>
                     ) : (
                       <Link
                         href={`/transactions/${t.hash}`}

@@ -130,7 +130,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ ha
                 {tx.from}
               </span>{" "}
               <span style={{ color: "var(--ink-3)" }}>
-                {tx.to ? "called" : "deployed a contract via"}
+                {tx.to ? "called" : "deployed a contract"}
               </span>
               {tx.to ? (
                 <>
@@ -142,6 +142,23 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ ha
                   <span className="mono" style={{ fontSize: 16, wordBreak: "break-all" }}>
                     {tx.to}
                   </span>
+                </>
+              ) : tx.contractAddress ? (
+                <>
+                  {" "}
+                  <span style={{ color: "var(--ink-3)" }}>at</span>{" "}
+                  <Link
+                    href={`/address/${tx.contractAddress}`}
+                    className="mono"
+                    style={{
+                      fontSize: 16,
+                      wordBreak: "break-all",
+                      color: "var(--accent-ink)",
+                      textDecoration: "none",
+                    }}
+                  >
+                    {tx.contractAddress}
+                  </Link>
                 </>
               ) : null}
               {BigInt(tx.value || "0") > 0n ? (
@@ -289,6 +306,17 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ ha
               <DetailRow label="Interaction">
                 {tx.to ? (
                   <Hash value={tx.to} tone="link" length={0} href={`/address/${tx.to}`} showCopy />
+                ) : tx.contractAddress ? (
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                    <Hash
+                      value={tx.contractAddress}
+                      tone="link"
+                      length={0}
+                      href={`/address/${tx.contractAddress}`}
+                      showCopy
+                    />
+                    <Chip tone="steel">Contract deployed</Chip>
+                  </span>
                 ) : (
                   <Chip tone="steel">Contract creation</Chip>
                 )}
