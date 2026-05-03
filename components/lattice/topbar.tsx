@@ -26,14 +26,16 @@ export function Topbar() {
   // Mobile-only: drives the hamburger drawer below the header.
   const [menuOpen, setMenuOpen] = useState(false);
   const { data: chain, isPending: chainPending } = useChain();
-  const { config } = useNetwork();
+  const { config, tenant } = useNetwork();
   const resolvedChainName = chain?.name?.trim();
-  // Always render SOMETHING in the topbar — the moment a user clicks
-  // "Testnet" the cache for that network is empty and useChain refetches,
-  // so resolvedChainName is briefly undefined. Fall back to the network's
-  // human label ("Local"/"Testnet"/"Mainnet") so the header never goes
-  // blank. Once firn responds, we swap in the real chain name.
-  const chainLabel = resolvedChainName ?? config.label;
+  // In tenant mode the tenant directory's label IS the user's
+  // chainName (passed through quick-l1 → managed-nodes); firn's
+  // /v1/chain.name is auto-generated ("L1 <id-prefix>") because firn
+  // doesn't know the human name. Prefer tenant.label so the header
+  // always shows what the user typed at deploy time, no flicker on
+  // hydration. Apex mode keeps firn-name-first (it's the right
+  // source there since there's no tenant context).
+  const chainLabel = tenant ? tenant.label : (resolvedChainName ?? config.label);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
