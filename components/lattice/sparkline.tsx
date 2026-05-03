@@ -48,6 +48,7 @@ export function Sparkline({
   fluid = false,
   strokeWidth,
   areaOpacity = 0.08,
+  yMax,
 }: {
   data: number[];
   width?: number;
@@ -57,6 +58,12 @@ export function Sparkline({
   fluid?: boolean;
   strokeWidth?: number;
   areaOpacity?: number;
+  /** Fixed y-axis ceiling. When set, the line is drawn against this
+   *  range instead of the EMA-tracked observed max — useful for series
+   *  with a natural absolute ceiling (e.g. gas utilization 0–100%) so
+   *  20% reads as 20% of the way up rather than nearly pegging the
+   *  chart when 20% happens to be the recent max. */
+  yMax?: number;
 }) {
   // EMA-smoothed max so the y-axis doesn't jitter ~3px per sample on a
   // chain with natural ~5% variance. Fast adapt up, slow decay down.
@@ -79,10 +86,15 @@ export function Sparkline({
     return <svg width={fluid ? "100%" : width} height={height} aria-hidden />;
   }
 
-  // Use the larger of the smoothed value and the current observed max so
-  // the *current* render is never below-axis when a new max lands faster
-  // than the effect can fire.
-  const range = Math.max(1, Math.max(smoothedMax, ...data) * Y_HEADROOM);
+  // Fixed-ceiling mode wins when the caller passed yMax — the line then
+  // reads as "x% of the absolute scale" rather than "x% of recent max".
+  // Otherwise use the larger of the smoothed value and the current
+  // observed max so the *current* render is never below-axis when a new
+  // max lands faster than the effect can fire.
+  const range =
+    yMax !== undefined && yMax > 0
+      ? yMax
+      : Math.max(1, Math.max(smoothedMax, ...data) * Y_HEADROOM);
 
   const n = data.length;
   const step = width / (n - 1);

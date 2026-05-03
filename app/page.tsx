@@ -201,7 +201,7 @@ export default function Home() {
               looks like real workload". */}
           <div style={{ marginTop: 28 }}>
             {gasSeries && gasSeries.length >= 2 ? (
-              <Sparkline fluid width={620} height={68} data={gasSeries} />
+              <Sparkline fluid width={620} height={68} data={gasSeries} yMax={100} />
             ) : (
               <Skeleton className="h-[68px] w-full" />
             )}
