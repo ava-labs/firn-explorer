@@ -128,8 +128,9 @@ export default function Home() {
   const blocksHover = useHoverPause("blocks");
   const txsHover = useHoverPause("transactions");
   const { paused } = useLivePause();
-  // Re-render every second so "Xs ago" labels stay current between feed ticks.
-  useNowTick(1000);
+  // Re-render at 10Hz so the "Xms ago" labels animate smoothly for the first
+  // second after a row appears, then settle into 1Hz-ish "Xs ago" updates.
+  useNowTick(100);
 
   // Address-count delta vs the value seen 60s ago. We hold a small ring
   // of {at, count} entries and pick the oldest one that's still within
