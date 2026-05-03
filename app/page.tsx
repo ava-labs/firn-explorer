@@ -462,7 +462,13 @@ export default function Home() {
                         {formatNativeAmount(t.value, symbol)}
                       </td>
                       <td className="mono" style={{ textAlign: "right", color: "var(--ink-4)" }}>
-                        {formatRelativeTime(t.block.timestamp)}
+                        {/* Fixed-width wrapper — the 1Hz re-render walks the
+                            string through "just now" / "5s ago" / "10s ago"
+                            / "1m ago", which under table-layout: auto pulls
+                            the column width and shifts the Value column. */}
+                        <span style={{ display: "inline-block", minWidth: 56, textAlign: "right" }}>
+                          {formatRelativeTime(t.block.timestamp)}
+                        </span>
                       </td>
                     </tr>
                   ))}

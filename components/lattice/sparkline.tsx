@@ -1,48 +1,37 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 /**
- * Live-updating sparkline driven by wall-clock time over a fixed window.
- *
- * Each sample carries the wall-clock time it arrived. On every animation
- * frame the path is recomputed with `x = width * (1 - age/WINDOW_MS)`,
- * so the line slides leftward at exactly the wall-clock rate and never
- * lurches because of a misjudged tween duration.
+ * Index-based sparkline. Points are spread evenly across the width and
+ * the newest sample is pinned to the right edge (x = width). No wall-
+ * clock animation: when a new sample arrives, every point shifts one
+ * slot left in a single render. The backend already smooths the series
+ * (rolling average per block), so the visual step is small and reads
+ * as a steady line rather than a treadmill scroll.
  *
  * History (so future-me doesn't re-make the same mistake):
  *
  *  v1 — translateX over EMA(dtMs).
  *       Cancel-and-snap on overlapping ticks → "skip back, slide again."
  *
- *  v2 — wall-clock positioning, but `windowMs = visibleCount * msPerSample`
- *       where msPerSample was an EMA of inter-tick wall-clock.
- *       Whenever the EMA shifted (chain warming up, network jitter), every
- *       sample's x recomputed → visible mid-chart "step" / catch-up jump.
- *       New samples were also stagger-stamped at `t = now - i*msPerSample`
- *       which gapped or overlapped against the previous newest sample
- *       depending on EMA convergence — second source of jumps.
+ *  v2 — wall-clock x = width * (1 - age/windowMs), windowMs derived from
+ *       an EMA of inter-tick wall-clock. EMA shifts (warm-up, jitter)
+ *       recomputed every sample's x → mid-chart "step" / catch-up jumps.
  *
- *  v3 (this) — fixed WINDOW_MS, no per-sample interval estimate at all.
- *       New samples (including a K-block batch) all stamp `t = now`. They
- *       share x and (because the backend already smooths to a rolling
- *       average) share y, collapsing visually to one point on the right
- *       edge. Previous samples scroll left at a constant pixel-velocity =
- *       width / WINDOW_MS px per ms. No EMA, no positioning drift, no
- *       discontinuities.
+ *  v3 — fixed WINDOW_MS, RAF re-render, samples timestamped on arrival.
+ *       Smooth in steady state but the continuous leftward slide read
+ *       as a "treadmill" and made the line feel busier than the data.
+ *
+ *  v4 (this) — drop wall-clock entirely. Render `data` directly with
+ *       x = i * width / (n-1); newest at x=width. React re-renders on
+ *       data change; no RAF loop, no per-sample timestamps.
  *
  * y-scale: pinned at 0 below (TPS is non-negative; grounding the area at
  * zero matches the visual convention readers expect from a throughput
  * chart). Top is an EMA-tracked max with 1.1× headroom so the line sits
  * a bit below the top edge instead of pegging it.
  */
-
-// Visible time window. 17s covers the bootstrap N=50 samples at the
-// SSE feed's 333ms cadence (≈16.65s of history), so first paint looks
-// full. Short enough that real load shifts are visible within a few
-// seconds. NOT user-tunable — making the window depend on observed
-// arrival rate is exactly what caused the v2 glitches.
-const WINDOW_MS = 17_000;
 
 // Visual headroom above the EMA-tracked max — the y-range is `max * Y_HEADROOM`
 // so the line sits ~10% below the top edge when values are pegged at the
@@ -51,7 +40,7 @@ const WINDOW_MS = 17_000;
 const Y_HEADROOM = 1.1;
 
 export function Sparkline({
-  data: incoming,
+  data,
   width = 240,
   height = 56,
   color = "var(--accent)",
@@ -69,138 +58,52 @@ export function Sparkline({
   strokeWidth?: number;
   areaOpacity?: number;
 }) {
-  // Samples currently inside (or recently outside) the visible window.
-  const samplesRef = useRef<{ v: number; t: number }[]>([]);
-  const lastIncomingRef = useRef<number[] | undefined>(undefined);
-
-  // Force a re-render every animation frame so the path tracks wall
-  // clock without depending on tick arrivals. RAF coalesces with the
-  // browser's compositor — even on idle chains the chart slides smoothly.
-  const [, force] = useState(0);
+  // EMA-smoothed max so the y-axis doesn't jitter ~3px per sample on a
+  // chain with natural ~5% variance. Fast adapt up, slow decay down.
+  // Lives in state so the smoothed value survives across renders without
+  // tripping react-hooks/refs (we used to mutate a ref during render).
+  const [smoothedMax, setSmoothedMax] = useState(1);
   useEffect(() => {
-    let alive = true;
-    let raf = 0;
-    const loop = () => {
-      if (!alive) return;
-      force((n) => (n + 1) | 0);
-      raf = requestAnimationFrame(loop);
-    };
-    raf = requestAnimationFrame(loop);
-    return () => {
-      alive = false;
-      cancelAnimationFrame(raf);
-    };
-  }, []);
+    if (!data || data.length < 2) return;
+    const observed = Math.max(1, ...data);
+    // Derived-state-from-props with a decay term that needs the previous
+    // render's value — there is no purely-functional formulation. The
+    // setState-in-effect pattern here is intentional; the cascading
+    // render is at most one extra commit per data tick, which already
+    // re-rendered for the new sample.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSmoothedMax((prev) => (observed > prev ? observed : prev * 0.95 + observed * 0.05));
+  }, [data]);
 
-  // Ingest new data. Diffs against the last seen `incoming` array to
-  // identify the K samples that just appeared at the right end and
-  // stamps them with `t = now`. Multi-block batches all share `t`, so
-  // they collapse to a single point on the right edge — visually fine
-  // because the backend produces an identical rolling-average value
-  // for every sample in a single shift.
-  useEffect(() => {
-    if (!incoming || incoming.length < 2) return;
-
-    const prev = lastIncomingRef.current;
-    const now = performance.now();
-
-    if (!prev) {
-      // First load — backfill with timestamps spread evenly across
-      // WINDOW_MS so the chart looks "full" on initial paint instead
-      // of starting with one fresh sample at the right edge.
-      const dt = WINDOW_MS / Math.max(1, incoming.length - 1);
-      samplesRef.current = incoming.map((v, i) => ({
-        v,
-        t: now - (incoming.length - 1 - i) * dt,
-      }));
-      // Seed the y-scale max so the first paint isn't compressed
-      // against y=1 (the useRef initial value) while the EMA catches up.
-      yScaleRef.current.max = Math.max(1, ...incoming);
-      lastIncomingRef.current = incoming;
-      return;
-    }
-
-    if (prev === incoming) return;
-
-    const K = detectShift(prev, incoming);
-    if (K === 0) {
-      // Refetch landed identical values. Nothing to stamp.
-      lastIncomingRef.current = incoming;
-      return;
-    }
-
-    // Stamp all K newly-arrived samples at the same wall-clock time.
-    // We don't know the precise arrival time of the in-between blocks
-    // (the SSE merge-flush coalesced them) and synthesizing a stagger
-    // creates positioning discontinuities — see header for details.
-    const newOnes = incoming.slice(incoming.length - K).map((v) => ({ v, t: now }));
-
-    // Append, then trim anything older than the window (with a small
-    // grace margin so a sample that just fell off doesn't pop visibly
-    // when wall-clock drifts inside a single frame).
-    const cutoff = now - WINDOW_MS * 1.2;
-    const merged = [...samplesRef.current, ...newOnes];
-    while (merged.length > 1 && merged[0].t < cutoff) merged.shift();
-    samplesRef.current = merged;
-
-    // Update y-scale max ONLY here (per-tick) — not in render. With
-    // ~5% natural variance in the rolling-average backend output, a
-    // per-frame Math.max(samples) jitters max ~3px between frames and
-    // produces visible vertical wobble even on a steady chain. Updating
-    // at sample-ingest cadence (~3Hz) makes the y-scale stable between
-    // ticks; the line slides left smoothly without retracing.
-    const observedMax = Math.max(1, ...merged.map((s) => s.v));
-    const prevMax = yScaleRef.current.max;
-    yScaleRef.current.max =
-      observedMax > prevMax ? observedMax : prevMax * 0.95 + observedMax * 0.05;
-
-    lastIncomingRef.current = incoming;
-  }, [incoming]);
-
-  // EMA-smoothed max with 1.1× headroom. Per-frame decay rate (0.92) is
-  // applied at RAF cadence (~60Hz), so τ ≈ 0.2s — the chart adapts
-  // quickly when load drops but doesn't snap on a single noisy sample.
-  const yScaleRef = useRef<{ max: number }>({ max: 1 });
-
-  // Compute the path inline. RAF re-renders make this cheap to recompute.
-  // (Don't memo here — refs aren't observable by React, so the obvious
-  // useMemo with `[force]` deps would never invalidate. v2 shipped that
-  // bug; the chart was stuck blank.)
-  //
-  // INTENTIONAL: the RAF tick (see force-render effect above) drives a
-  // re-render every frame so the path geometry tracks wall-clock time;
-  // reading samplesRef.current and performance.now() during render is
-  // load-bearing for the animation, not a bug. Refs are stable across
-  // renders, and the impure `now` is exactly what we want here — each
-  // render samples a fresh "now" against fixed sample timestamps.
-  /* eslint-disable react-hooks/refs, react-hooks/purity */
-  const samples = samplesRef.current;
-  let d = "";
-  let dArea = "";
-  let ready = false;
-  if (samples.length >= 2) {
-    // y-scale max comes from the ingest path (per-tick), not per-frame.
-    const range = Math.max(1, yScaleRef.current.max * Y_HEADROOM);
-
-    const now = performance.now();
-    const pts: Array<[number, number]> = samples.map((s) => {
-      const age = now - s.t;
-      const x = width - (age / WINDOW_MS) * width;
-      const y = height - (s.v / range) * (height - 6) - 3;
-      return [x, y];
-    });
-
-    d = catmullRomToBezier(pts);
-    const lastX = pts[pts.length - 1][0];
-    const firstX = pts[0][0];
-    dArea = `${d} L${lastX},${height} L${firstX},${height} Z`;
-    ready = true;
-  }
-  /* eslint-enable react-hooks/refs, react-hooks/purity */
-
-  if (!ready) {
+  if (!data || data.length < 2) {
     return <svg width={fluid ? "100%" : width} height={height} aria-hidden />;
   }
+
+  // Use the larger of the smoothed value and the current observed max so
+  // the *current* render is never below-axis when a new max lands faster
+  // than the effect can fire.
+  const range = Math.max(1, Math.max(smoothedMax, ...data) * Y_HEADROOM);
+
+  const n = data.length;
+  const step = width / (n - 1);
+  const pts: Array<[number, number]> = data.map((v, i) => {
+    const x = i * step;
+    const y = height - (v / range) * (height - 6) - 3;
+    return [x, y];
+  });
+
+  const d = catmullRomToBezier(pts);
+  const lastX = pts[pts.length - 1][0];
+  const lastY = pts[pts.length - 1][1];
+  const firstX = pts[0][0];
+  const dArea = `${d} L${lastX},${height} L${firstX},${height} Z`;
+
+  // Live cursor: a pulsing dot pinned to the newest sample so the eye
+  // can read the current value and direction at a glance. Insetting the
+  // x coordinate by the halo radius keeps the dot fully inside the
+  // overflow-hidden viewbox.
+  const dotX = Math.max(0, Math.min(width, lastX) - 5);
+  const dotY = Math.max(0, Math.min(height, lastY));
 
   return (
     <svg
@@ -222,30 +125,27 @@ export function Sparkline({
         strokeLinejoin="round"
         vectorEffect={fluid ? "non-scaling-stroke" : undefined}
       />
+      <circle cx={dotX} cy={dotY} r={3} fill={color} opacity={0.25}>
+        <animate
+          attributeName="r"
+          values="3;6;3"
+          dur="1.6s"
+          repeatCount="indefinite"
+          calcMode="spline"
+          keySplines="0.4 0 0.6 1; 0.4 0 0.6 1"
+        />
+        <animate
+          attributeName="opacity"
+          values="0.45;0;0.45"
+          dur="1.6s"
+          repeatCount="indefinite"
+          calcMode="spline"
+          keySplines="0.4 0 0.6 1; 0.4 0 0.6 1"
+        />
+      </circle>
+      <circle cx={dotX} cy={dotY} r={2} fill={color} />
     </svg>
   );
-}
-
-/**
- * Returns how many slots `curr` is shifted left compared to `prev`.
- * Specifically, finds the smallest K such that curr[i] === prev[i+K]
- * for all valid i. Returns 0 when the windows are identical (a refetch
- * with no new data) and prev.length when nothing aligns.
- */
-function detectShift(prev: number[], curr: number[]): number {
-  if (prev.length === 0) return curr.length;
-  if (prev.length !== curr.length) return curr.length;
-  for (let K = 0; K < prev.length; K++) {
-    let match = true;
-    for (let i = 0; i + K < prev.length; i++) {
-      if (prev[i + K] !== curr[i]) {
-        match = false;
-        break;
-      }
-    }
-    if (match) return K;
-  }
-  return prev.length;
 }
 
 /**

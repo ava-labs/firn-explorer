@@ -4,7 +4,7 @@ import { useState, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { ExplorerFeedBridge } from "@/lib/api/explorer";
-import { NetworkProvider } from "@/lib/api/network";
+import { NetworkProvider, type TenantInfo } from "@/lib/api/network";
 import { LivePauseProvider } from "@/lib/api/live-pause";
 
 function makeQueryClient() {
@@ -28,11 +28,17 @@ function getQueryClient() {
   return browserQueryClient;
 }
 
-export function Providers({ children }: { children: ReactNode }) {
+export function Providers({
+  children,
+  tenant = null,
+}: {
+  children: ReactNode;
+  tenant?: TenantInfo | null;
+}) {
   const [client] = useState(getQueryClient);
   return (
     <QueryClientProvider client={client}>
-      <NetworkProvider>
+      <NetworkProvider tenant={tenant}>
         <LivePauseProvider>
           {/* Single SSE bridge drives both the home-page bootstrap
               merge and the per-page list invalidations (/blocks,
