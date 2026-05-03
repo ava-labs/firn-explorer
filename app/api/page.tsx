@@ -414,7 +414,7 @@ export default function APIPlaygroundPage() {
   if (docError) {
     return (
       <div className="px-4 sm:px-6 lg:px-10 py-8">
-        <div className="eyebrow mb-2">◆ API playground</div>
+        <div className="eyebrow mb-2">API playground</div>
         <div className="h-display mb-4" style={{ fontSize: 32 }}>
           firn v1
         </div>
@@ -431,7 +431,7 @@ export default function APIPlaygroundPage() {
   if (!doc || !endpoint) {
     return (
       <div className="px-4 sm:px-6 lg:px-10 py-8">
-        <div className="eyebrow mb-2">◆ API playground</div>
+        <div className="eyebrow mb-2">API playground</div>
         <div className="h-display mb-4" style={{ fontSize: 32 }}>
           firn v1
         </div>
@@ -486,7 +486,7 @@ function Sidebar({
         overflowY: "auto",
       }}
     >
-      <div className="eyebrow mb-3">◆ API playground</div>
+      <div className="eyebrow mb-3">API playground</div>
       <div className="h-display mb-5" style={{ fontSize: 22 }}>
         {title} {version}
       </div>

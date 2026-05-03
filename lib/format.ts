@@ -155,18 +155,82 @@ export function gasUtilization(gas: { limit: string; used: string }): string {
 }
 
 /**
- * Compute and format the wei fee paid by a transaction. Mirrors the
- * common formula `gasPrice * gasUsed`, then runs through
- * `formatNativeAmount` for unit-aware display. Used on block detail and
- * transaction detail.
+ * Pick a tasteful tone for a 0–100 utilization percentage. Returns a CSS
+ * variable reference: `--ink-3` (boring grey, idle), `--good` (busy),
+ * `--warn` (filling up), or `--bad` (near-saturation). Thresholds match
+ * how operators reason about block gas pressure — under ~10% the chain
+ * is essentially idle and the chart should blend into the surrounding
+ * text rather than alarming green; 10–60% there's real load, 60–85%
+ * the L1 is busy but still healthy, above 85% blocks are routinely full
+ * and queue depth starts to matter.
+ */
+export function gasUtilTone(pct: number): string {
+  if (pct >= 85) return "var(--bad)";
+  if (pct >= 60) return "var(--warn)";
+  if (pct > 10) return "var(--good)";
+  return "var(--ink-3)";
+}
+
+/**
+ * Compute and format the wei fee paid by a transaction (`gasPrice *
+ * gasUsed`) at whatever unit reads best. Auto-picks symbol/wei/gwei to
+ * avoid the two failure modes:
+ *
+ *   - native units: collapses every benchmark-chain fee (525000 wei =
+ *     5.25e-13 AVAX) to "0 AVAX"
+ *   - raw wei: scales fine for tiny fees but prints "1000000000000000 wei"
+ *     for a normal mainnet 0.001 AVAX tx
+ *
+ * Thresholds:
+ *
+ *   ≥ 0.0001 native   → "<n.nnn> SYMBOL" (4-decimal cap)
+ *   ≥ 1 gwei          → "<n> gwei"        (sub-native fees, common on benchmarks)
+ *   otherwise         → "<n> wei"         (sub-gwei fees)
+ *
+ * Used on block detail, transaction detail, and the homepage live txs
+ * table where the column is narrow and we can't waste pixels on big
+ * numbers or many fractional digits.
  */
 export function formatTxFee(gasUsed: number, gasPriceWei: string, symbol: string): string {
   try {
     const wei = BigInt(gasPriceWei) * BigInt(gasUsed);
-    return formatNativeAmount(wei.toString(), symbol);
+    if (wei === 0n) return `0 ${symbol}`;
+    const ONE_GWEI = BigInt(10) ** BigInt(9);
+    const NATIVE_THRESHOLD = BigInt(10) ** BigInt(14); // 0.0001 native
+    if (wei >= NATIVE_THRESHOLD) {
+      return formatNativeAmount(wei.toString(), symbol);
+    }
+    if (wei >= ONE_GWEI) {
+      const gwei = Number(wei) / 1e9;
+      const formatted = gwei.toLocaleString(undefined, {
+        maximumFractionDigits: gwei >= 100 ? 0 : gwei >= 10 ? 1 : 2,
+      });
+      return `${formatted} gwei`;
+    }
+    return `${Number(wei).toLocaleString()} wei`;
   } catch {
     return "—";
   }
+}
+
+/**
+ * Compact byte-size display for block payloads. Auto-picks unit so we
+ * never print "203,847 B" or "0.001 MB" — KB up to 1 MiB, MB above.
+ * Used on the live blocks panel where the column is narrow.
+ */
+export function formatBlockSize(bytes: number | null | undefined): string {
+  if (bytes == null || !Number.isFinite(bytes) || bytes < 0) return "—";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) {
+    const kb = bytes / 1024;
+    return `${kb.toLocaleString(undefined, {
+      maximumFractionDigits: kb >= 100 ? 0 : 1,
+    })} KB`;
+  }
+  const mb = bytes / (1024 * 1024);
+  return `${mb.toLocaleString(undefined, {
+    maximumFractionDigits: mb >= 10 ? 1 : 2,
+  })} MB`;
 }
 
 /** Render a millisecond block time as `<n> ms` or `<n.nn> s`. */

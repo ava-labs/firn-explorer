@@ -49,7 +49,7 @@ export function NotFoundDetail({
       >
         ← {indexLabel}
       </Link>
-      <div className="eyebrow mb-2.5">◆ {kind}</div>
+      <div className="eyebrow mb-2.5">{kind}</div>
       <div className="h-display mb-2" style={{ fontSize: 32 }}>
         {notFound ? "Not found" : `Couldn't load ${kind.toLowerCase()}`}
       </div>

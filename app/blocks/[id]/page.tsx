@@ -64,7 +64,7 @@ export default function BlockDetailPage({ params }: { params: Promise<{ id: stri
 
   return (
     <div className="px-4 sm:px-6 lg:px-10 py-6 sm:py-8 pb-12 max-w-[1080px] mx-auto">
-      <div className="eyebrow mb-2.5">◆ Block</div>
+      <div className="eyebrow mb-2.5">Block</div>
 
       {/* Headline */}
       <div className="flex items-center gap-3.5 mb-2">
@@ -262,8 +262,8 @@ export default function BlockDetailPage({ params }: { params: Promise<{ id: stri
                 <tr>
                   <th>Hash</th>
                   <th style={{ width: 110 }}>Method</th>
-                  <th>From</th>
-                  <th>To</th>
+                  <th style={{ width: 160 }}>From</th>
+                  <th style={{ width: 160 }}>To</th>
                   <th style={{ textAlign: "right", width: 160 }}>Value</th>
                   <th style={{ textAlign: "right", width: 120 }}>Fee</th>
                 </tr>
@@ -386,7 +386,7 @@ function ConsensusTab({ block }: { block: import("@/lib/api/queries").Block }) {
         style={{ padding: 24 }}
       >
         <div className="eyebrow" style={{ marginBottom: 14 }}>
-          ◆ Snowman++ envelope
+          Snowman++ envelope
         </div>
         <div
           style={{
@@ -455,7 +455,7 @@ function ConsensusTab({ block }: { block: import("@/lib/api/queries").Block }) {
         style={{ padding: 24 }}
       >
         <div className="eyebrow" style={{ marginBottom: 14 }}>
-          ◆ Dynamic-fee state
+          Dynamic-fee state
         </div>
         <div
           style={{
@@ -515,7 +515,7 @@ function ConsensusTab({ block }: { block: import("@/lib/api/queries").Block }) {
           style={{ padding: 24 }}
         >
           <div className="eyebrow" style={{ marginBottom: 14 }}>
-            ◆ Atomic envelope (pre-Cortina)
+            Atomic envelope (pre-Cortina)
           </div>
           <RawBlob label="blockExtraData" value={c.blockExtraData} />
         </section>
@@ -524,7 +524,7 @@ function ConsensusTab({ block }: { block: import("@/lib/api/queries").Block }) {
       {/* Per-poll telemetry — known-out-of-scope explainer */}
       <section className="border border-dashed border-line rounded-[10px]" style={{ padding: 20 }}>
         <div className="eyebrow" style={{ marginBottom: 8, color: "var(--ink-3)" }}>
-          ◆ Per-poll telemetry
+          Per-poll telemetry
         </div>
         <div style={{ fontSize: 12.5, color: "var(--ink-3)", lineHeight: 1.65 }}>
           Vote counts, voter set, and finalization rounds live in AvalancheGo&apos;s runtime metrics
@@ -546,7 +546,7 @@ function FeeWindowCard({ extra }: { extra: NonNullable<ReturnType<typeof decodeC
   return (
     <section className="card border border-line rounded-[10px] bg-bg-elev" style={{ padding: 24 }}>
       <div className="eyebrow" style={{ marginBottom: 14 }}>
-        ◆ Dynamic-fee window
+        Dynamic-fee window
       </div>
       <div style={{ fontSize: 12, color: "var(--ink-3)", marginBottom: 14, lineHeight: 1.5 }}>
         10-sample rolling gas window from{" "}

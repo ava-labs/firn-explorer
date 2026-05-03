@@ -46,7 +46,7 @@ export default function TokenDetailPage({ params }: { params: Promise<{ hash: st
 
   return (
     <div className="px-4 sm:px-6 lg:px-10 py-6 sm:py-8 pb-12">
-      <div className="eyebrow mb-2.5">◆ Token · ERC-20</div>
+      <div className="eyebrow mb-2.5">Token · ERC-20</div>
 
       {/* Header: icon + name/symbol */}
       <div className="flex items-center gap-4 mb-2">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Hash } from "@/components/lattice/hash";
@@ -13,13 +13,23 @@ import { KpiCell } from "@/components/page/kpi-cell";
 import { useFreshHashes, useFreshKeys, useNowTick } from "@/lib/use-fresh";
 import { useExplorerBootstrap } from "@/lib/api/explorer";
 import { useLivePause, type LiveFeed } from "@/lib/api/live-pause";
-import type { ICMMessage } from "@/lib/api/queries";
 import {
+  isBootstrappingError,
+  useL1Uptime,
+  useValidators,
+  type ICMMessage,
+  type L1UptimeEntry,
+  type Validator,
+} from "@/lib/api/queries";
+import {
+  formatBlockSize,
   formatNativeAmount,
   formatNumber,
   formatRelativeTime,
+  formatTxFee,
   gasUsedPct,
   gasUsedPctNum,
+  gasUtilTone,
   truncateHash,
 } from "@/lib/format";
 
@@ -132,11 +142,6 @@ export default function Home() {
           falls below; switches to the original 1.4fr / 1fr split at lg. */}
       <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-8 lg:gap-12 items-start mb-10 lg:mb-14">
         <div>
-          <div className="eyebrow mb-5">
-            ◆ {chain?.name ?? "…"}
-            {chain ? ` · ${chain.network}` : ""}
-            {blockTimeMs ? ` · ${(blockTimeMs / 1000).toFixed(2)}s block time` : ""}
-          </div>
           <div className="h-display" style={{ fontSize: 88 }}>
             {stats ? (
               <AnimatedNumber value={stats.totalBlocks} duration={0.7} />
@@ -201,7 +206,14 @@ export default function Home() {
               looks like real workload". */}
           <div style={{ marginTop: 28 }}>
             {gasSeries && gasSeries.length >= 2 ? (
-              <Sparkline fluid width={620} height={68} data={gasSeries} yMax={100} />
+              <Sparkline
+                fluid
+                width={620}
+                height={68}
+                data={gasSeries}
+                yMax={100}
+                color={gasUtilTone(gasSeries[gasSeries.length - 1])}
+              />
             ) : (
               <Skeleton className="h-[68px] w-full" />
             )}
@@ -262,66 +274,119 @@ export default function Home() {
               // visible row-overlap glitch. The CSS keyframe is pure
               // background-color + a tiny vertical settle, never a
               // transform — clean even when 3 blocks land per merge-flush.
-              blocks.slice(0, HOME_LIVE_BLOCKS).map((b, i, arr) => (
-                <Link
-                  key={b.hash}
-                  href={`/blocks/${b.number}`}
-                  className={`grid items-center gap-3.5 ${freshBlocks.has(b.hash) ? "fresh-row" : ""}`}
-                  style={{
-                    gridTemplateColumns: "100px 1fr auto",
-                    padding: "14px 18px",
-                    borderBottom: i < arr.length - 1 ? "1px solid var(--line-soft)" : 0,
-                    textDecoration: "none",
-                    color: "inherit",
-                  }}
-                >
-                  <div>
-                    <div className="mono" style={{ fontSize: 13, color: "var(--ink)" }}>
-                      #{formatNumber(b.number)}
+              blocks.slice(0, HOME_LIVE_BLOCKS).map((b, i, arr) => {
+                const pct = gasUsedPctNum(b.gas.used, b.gas.limit);
+                const tone = gasUtilTone(pct);
+                return (
+                  <Link
+                    key={b.hash}
+                    href={`/blocks/${b.number}`}
+                    className={`grid items-center gap-3.5 ${freshBlocks.has(b.hash) ? "fresh-row" : ""}`}
+                    style={{
+                      // 3-column grid: block#/age | txs/size·miner | gas%/bar.
+                      // Fixed column widths (rather than 1fr) keep the live
+                      // ticker stable as the relative-time string ticks
+                      // through "just now → 5s ago → 1m ago" — neighbours
+                      // never reflow.
+                      gridTemplateColumns: "108px 1fr 96px",
+                      padding: "14px 18px",
+                      borderBottom: i < arr.length - 1 ? "1px solid var(--line-soft)" : 0,
+                      textDecoration: "none",
+                      color: "inherit",
+                    }}
+                  >
+                    <div>
+                      <div
+                        className="mono"
+                        style={{
+                          fontSize: 13,
+                          color: "var(--ink)",
+                          fontVariantNumeric: "tabular-nums",
+                        }}
+                      >
+                        #{formatNumber(b.number)}
+                      </div>
+                      <div
+                        className="mono"
+                        style={{
+                          fontSize: 11,
+                          color: "var(--ink-4)",
+                          fontVariantNumeric: "tabular-nums",
+                        }}
+                      >
+                        {/* inline-block + minWidth keeps the time ticker
+                            from nudging anything when the string length
+                            crosses a unit boundary. */}
+                        <span style={{ display: "inline-block", minWidth: 56 }}>
+                          {formatRelativeTime(b.timestamp)}
+                        </span>
+                      </div>
                     </div>
-                    <div className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>
-                      {formatRelativeTime(b.timestamp)}
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 12.5, color: "var(--ink-2)" }}>
-                      {b.transactionsCount} txns
-                    </div>
-                    <div className="mono" style={{ fontSize: 10.5, color: "var(--ink-4)" }}>
-                      by {b.miner ? truncateHash(b.miner, 6, 4) : "—"}
-                    </div>
-                  </div>
-                  <div style={{ minWidth: 64 }}>
-                    <div
-                      className="mono"
-                      style={{
-                        fontSize: 12,
-                        color: "var(--ink-2)",
-                        textAlign: "right",
-                      }}
-                    >
-                      {gasUsedPct(b.gas.used, b.gas.limit)}
-                    </div>
-                    <div
-                      style={{
-                        height: 3,
-                        marginTop: 4,
-                        borderRadius: 99,
-                        background: "var(--bg-sunken)",
-                        overflow: "hidden",
-                      }}
-                    >
+                    <div>
                       <div
                         style={{
-                          width: `${Math.min(100, gasUsedPctNum(b.gas.used, b.gas.limit))}%`,
-                          height: "100%",
-                          background: "var(--ink-3)",
+                          fontSize: 12.5,
+                          color: "var(--ink-2)",
+                          fontVariantNumeric: "tabular-nums",
                         }}
-                      />
+                      >
+                        {formatNumber(b.transactionsCount)}{" "}
+                        <span style={{ color: "var(--ink-4)" }}>txns</span>
+                      </div>
+                      <div
+                        className="mono"
+                        style={{
+                          fontSize: 10.5,
+                          color: "var(--ink-4)",
+                          fontVariantNumeric: "tabular-nums",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                        title={b.miner || ""}
+                      >
+                        {formatBlockSize(b.size)}
+                        {b.miner ? (
+                          <>
+                            <span style={{ color: "var(--ink-5)" }}> · by </span>
+                            {truncateHash(b.miner, 4, 4)}
+                          </>
+                        ) : null}
+                      </div>
                     </div>
-                  </div>
-                </Link>
-              ))
+                    <div>
+                      <div
+                        className="mono"
+                        style={{
+                          fontSize: 12,
+                          color: tone,
+                          textAlign: "right",
+                          fontVariantNumeric: "tabular-nums",
+                        }}
+                      >
+                        {gasUsedPct(b.gas.used, b.gas.limit)}
+                      </div>
+                      <div
+                        style={{
+                          height: 3,
+                          marginTop: 4,
+                          borderRadius: 99,
+                          background: "var(--bg-sunken)",
+                          overflow: "hidden",
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: `${Math.min(100, pct)}%`,
+                            height: "100%",
+                            background: tone,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </Link>
+                );
+              })
             )}
           </div>
         </div>
@@ -394,22 +459,32 @@ export default function Home() {
           <table className="lat-tbl">
             <thead>
               <tr>
-                <th style={{ width: 72 }}>Status</th>
-                <th>Hash</th>
-                <th className="hidden md:table-cell" style={{ width: 110 }}>
+                <th style={{ width: 64 }}>Status</th>
+                <th style={{ width: 160 }}>Hash</th>
+                <th className="hidden md:table-cell" style={{ width: 130 }}>
                   Method
                 </th>
-                <th className="hidden md:table-cell">From</th>
-                <th className="hidden md:table-cell">To</th>
-                <th style={{ textAlign: "right" }}>Value</th>
-                <th style={{ textAlign: "right", width: 70 }}>Age</th>
+                <th className="hidden md:table-cell" style={{ width: 130 }}>
+                  From
+                </th>
+                <th className="hidden md:table-cell" style={{ width: 130 }}>
+                  To
+                </th>
+                <th className="hidden lg:table-cell mono" style={{ width: 80 }}>
+                  Nonce
+                </th>
+                <th className="hidden lg:table-cell" style={{ textAlign: "right", width: 100 }}>
+                  Fee
+                </th>
+                <th style={{ textAlign: "right", width: 130 }}>Value</th>
+                <th style={{ textAlign: "right", width: 110 }}>Block · Age</th>
               </tr>
             </thead>
             <tbody>
               {!txs
                 ? Array.from({ length: HOME_LIVE_TXS }).map((_, i) => (
                     <tr key={i}>
-                      <td colSpan={7}>
+                      <td colSpan={9}>
                         <Skeleton className="h-4 w-full" />
                       </td>
                     </tr>
@@ -464,17 +539,55 @@ export default function Home() {
                           </span>
                         )}
                       </td>
+                      <td
+                        className="hidden lg:table-cell mono"
+                        style={{ color: "var(--ink-3)", fontVariantNumeric: "tabular-nums" }}
+                      >
+                        {t.nonce}
+                      </td>
+                      <td
+                        className="hidden lg:table-cell mono"
+                        style={{ textAlign: "right", color: "var(--ink-4)" }}
+                      >
+                        {formatTxFee(t.gas.used, t.gas.price, symbol)}
+                      </td>
                       <td className="mono" style={{ textAlign: "right", color: "var(--ink)" }}>
                         {formatNativeAmount(t.value, symbol)}
                       </td>
-                      <td className="mono" style={{ textAlign: "right", color: "var(--ink-4)" }}>
-                        {/* Fixed-width wrapper — the 1Hz re-render walks the
-                            string through "just now" / "5s ago" / "10s ago"
-                            / "1m ago", which under table-layout: auto pulls
-                            the column width and shifts the Value column. */}
-                        <span style={{ display: "inline-block", minWidth: 56, textAlign: "right" }}>
-                          {formatRelativeTime(t.block.timestamp)}
-                        </span>
+                      <td className="mono" style={{ textAlign: "right" }}>
+                        {/* Two-line cell: block number on top, age below.
+                            The whole cell is fixed-width on the column;
+                            inside, both lines use tabular-nums + a
+                            fixed-width inline-block for the age string so
+                            the 1Hz re-render walking through "just now" /
+                            "5s ago" / "10s ago" / "1m ago" never resizes
+                            the column or shifts neighbours. */}
+                        <div
+                          style={{
+                            color: "var(--ink-2)",
+                            fontSize: 12,
+                            fontVariantNumeric: "tabular-nums",
+                          }}
+                        >
+                          #{formatNumber(t.block.number)}
+                        </div>
+                        <div
+                          style={{
+                            color: "var(--ink-4)",
+                            fontSize: 11,
+                            fontVariantNumeric: "tabular-nums",
+                          }}
+                        >
+                          <span
+                            style={{
+                              display: "inline-block",
+                              minWidth: 64,
+                              textAlign: "right",
+                            }}
+                          >
+                            {formatRelativeTime(t.block.timestamp)}
+                          </span>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -482,6 +595,8 @@ export default function Home() {
           </table>
         </div>
       </div>
+
+      <ValidatorsCard />
     </div>
   );
 }
@@ -761,5 +876,237 @@ function formatGwei(weiStr: string): string {
     return `${gwei.toLocaleString(undefined, { maximumFractionDigits: 2 })} gwei`;
   } catch {
     return "—";
+  }
+}
+
+// Compact, ranked-by-weight validators card. Hides itself entirely when
+// the P-Chain isn't reachable (bootstrapping or unreachable upstream) so
+// the homepage doesn't display a permanent error region for an L1 whose
+// validators endpoint is just slow.
+const HOME_VALIDATORS = 5;
+
+function ValidatorsCard() {
+  const { data: vsResp, isPending, error } = useValidators();
+  const { data: l1Uptime } = useL1Uptime();
+
+  const uptimeByNode = useMemo(() => {
+    const m = new Map<string, string | number>();
+    for (const e of (l1Uptime?.validators ?? []) as L1UptimeEntry[]) {
+      const u = e.uptimePercent ?? e.uptime;
+      if (u !== undefined) m.set(e.nodeID, u);
+    }
+    return m;
+  }, [l1Uptime]);
+
+  // Stable identity: wrap in useMemo so the totalWeight + top useMemo
+  // deps don't invalidate on every render when vsResp is undefined.
+  const validators = useMemo(() => vsResp?.validators ?? [], [vsResp]);
+
+  const totalWeight = useMemo(() => {
+    let sum = 0n;
+    for (const v of validators) {
+      try {
+        sum += BigInt(v.weight ?? "0");
+      } catch {
+        /* skip */
+      }
+    }
+    return sum;
+  }, [validators]);
+
+  const top = useMemo(() => {
+    const arr = [...validators];
+    arr.sort((a, b) => cmpBig(b.weight, a.weight));
+    return arr.slice(0, HOME_VALIDATORS);
+  }, [validators]);
+
+  const liveCount = validators.filter((v) => v.connected === true).length;
+
+  // Hide the whole panel when the P-Chain is bootstrapping — the validators
+  // page already explains this, and the homepage is busy enough without a
+  // dedicated error tile.
+  if (isBootstrappingError(error)) return null;
+
+  return (
+    <div style={{ marginTop: 48 }}>
+      <div className="flex items-baseline justify-between mb-[18px]">
+        <div>
+          <div className="eyebrow mb-1.5">Securing this L1</div>
+          <div className="h-display" style={{ fontSize: 26 }}>
+            Validators
+          </div>
+        </div>
+        <Link
+          href="/validators"
+          style={{
+            fontSize: 12.5,
+            color: "var(--ink-3)",
+            textDecoration: "none",
+          }}
+        >
+          View all →
+        </Link>
+      </div>
+      <div className="card border border-line rounded-[10px] bg-bg-elev overflow-hidden">
+        <div
+          className="flex items-center justify-between border-b border-line"
+          style={{ padding: "14px 18px" }}
+        >
+          <div className="mono" style={{ fontSize: 12, color: "var(--ink-2)" }}>
+            {isPending ? (
+              <Skeleton className="h-4 w-[160px]" />
+            ) : (
+              <>
+                <span style={{ color: "var(--ink)" }}>{validators.length}</span>{" "}
+                <span style={{ color: "var(--ink-3)" }}>active</span>
+                {validators.length > 0 ? (
+                  <>
+                    {" "}
+                    <span style={{ color: "var(--ink-4)" }}>·</span>{" "}
+                    <span style={{ color: "var(--ink-3)" }}>
+                      {liveCount}/{validators.length} live
+                    </span>
+                  </>
+                ) : null}
+              </>
+            )}
+          </div>
+          <span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>
+            top {Math.min(HOME_VALIDATORS, validators.length)} by weight
+          </span>
+        </div>
+        <div>
+          {isPending ? (
+            Array.from({ length: HOME_VALIDATORS }).map((_, i) => (
+              <div key={i} className="px-[18px] py-3.5">
+                <Skeleton className="h-4 w-full" />
+              </div>
+            ))
+          ) : top.length === 0 ? (
+            <div className="text-center py-12" style={{ color: "var(--ink-4)", fontSize: 13 }}>
+              No validators yet.
+            </div>
+          ) : (
+            top.map((v, i, arr) => (
+              <ValidatorRow
+                key={v.txID || v.nodeID}
+                v={v}
+                totalWeight={totalWeight}
+                uptime={uptimeByNode.get(v.nodeID) ?? v.uptime}
+                isLast={i === arr.length - 1}
+              />
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ValidatorRow({
+  v,
+  totalWeight,
+  uptime,
+  isLast,
+}: {
+  v: Validator;
+  totalWeight: bigint;
+  uptime: string | number | undefined;
+  isLast: boolean;
+}) {
+  const sharePct = useMemo(() => {
+    try {
+      const w = BigInt(v.weight ?? "0");
+      if (totalWeight === 0n) return 0;
+      return Number((w * 10000n) / totalWeight) / 100;
+    } catch {
+      return 0;
+    }
+  }, [v.weight, totalWeight]);
+
+  return (
+    <Link
+      href={`/validators/${encodeURIComponent(v.nodeID)}`}
+      className="grid items-center gap-3.5"
+      style={{
+        gridTemplateColumns: "1fr 200px 90px 70px",
+        padding: "14px 18px",
+        borderBottom: isLast ? 0 : "1px solid var(--line-soft)",
+        textDecoration: "none",
+        color: "inherit",
+      }}
+    >
+      <div
+        className="mono"
+        style={{
+          fontSize: 12.5,
+          color: "var(--accent-ink)",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}
+        title={v.nodeID}
+      >
+        {truncateHash(v.nodeID, 10, 6)}
+      </div>
+      <div className="flex items-center gap-2">
+        <div
+          style={{
+            flex: 1,
+            height: 4,
+            borderRadius: 99,
+            background: "var(--bg-sunken)",
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              width: `${Math.min(100, sharePct)}%`,
+              height: "100%",
+              background: "var(--ink)",
+            }}
+          />
+        </div>
+        <span
+          className="mono"
+          style={{ fontSize: 11.5, color: "var(--ink-3)", minWidth: 48, textAlign: "right" }}
+        >
+          {sharePct.toFixed(2)}%
+        </span>
+      </div>
+      <div className="mono" style={{ fontSize: 12, color: "var(--ink-3)", textAlign: "right" }}>
+        {formatRowUptime(uptime)}
+      </div>
+      <div
+        className="mono"
+        style={{
+          fontSize: 11,
+          color: v.connected ? "var(--good)" : "var(--ink-4)",
+          textAlign: "right",
+        }}
+      >
+        {v.connected === undefined ? "—" : v.connected ? "● live" : "○ off"}
+      </div>
+    </Link>
+  );
+}
+
+function formatRowUptime(uptime: string | number | undefined): string {
+  if (uptime === undefined || uptime === "") return "—";
+  const n = typeof uptime === "number" ? uptime : parseFloat(uptime);
+  if (!Number.isFinite(n)) return "—";
+  // P-Chain returns 0..1 fractional ratio; subnet-evm /validators returns 0..100.
+  const pct = n <= 1 ? n * 100 : n;
+  return `${pct.toFixed(2)}%`;
+}
+
+function cmpBig(a: string | undefined, b: string | undefined): number {
+  try {
+    const ai = BigInt(a ?? "0");
+    const bi = BigInt(b ?? "0");
+    if (ai === bi) return 0;
+    return ai > bi ? 1 : -1;
+  } catch {
+    return 0;
   }
 }

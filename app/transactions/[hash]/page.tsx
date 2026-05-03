@@ -40,7 +40,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ ha
   if (isGenesisRef) {
     return (
       <div className="px-4 sm:px-6 lg:px-10 py-6 sm:py-8 pb-12 max-w-[1080px] mx-auto">
-        <div className="eyebrow mb-2.5">◆ Genesis reference</div>
+        <div className="eyebrow mb-2.5">Genesis reference</div>
         <div className="h-display mb-1" style={{ fontSize: 28 }}>
           Block 0 — Genesis
         </div>
@@ -84,7 +84,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ ha
 
   return (
     <div className="px-4 sm:px-6 lg:px-10 py-6 sm:py-8 pb-12 max-w-[1080px] mx-auto">
-      <div className="eyebrow mb-2.5">◆ Transaction</div>
+      <div className="eyebrow mb-2.5">Transaction</div>
 
       {/* Headline */}
       <div className="flex items-start gap-3.5 mb-[22px] flex-wrap">
