@@ -1,9 +1,11 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, Inter_Tight, JetBrains_Mono } from "next/font/google";
+import { headers } from "next/headers";
 import Script from "next/script";
 import { Providers } from "./providers";
 import { Topbar } from "@/components/lattice/topbar";
 import { Footer } from "@/components/lattice/footer";
+import type { TenantInfo } from "@/lib/api/network";
 import "./globals.css";
 
 const interTight = Inter_Tight({
@@ -57,11 +59,19 @@ const themeBootstrap = `
 })();
 `;
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Tenant identity for `<slug>.firn.gg` deploys is set by middleware.ts
+  // on the request headers; we lift it here so the SSR'd HTML is
+  // already in tenant mode (no flicker on hydration).
+  const h = await headers();
+  const slug = h.get("x-firn-tenant-slug");
+  const label = h.get("x-firn-tenant-label");
+  const tenant: TenantInfo | null = slug && label ? { slug, label } : null;
+
   return (
     <html
       lang="en"
@@ -81,7 +91,7 @@ export default function RootLayout({
           strategy="beforeInteractive"
           dangerouslySetInnerHTML={{ __html: themeBootstrap }}
         />
-        <Providers>
+        <Providers tenant={tenant}>
           <Topbar />
           <main>{children}</main>
           <Footer />

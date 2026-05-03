@@ -9,11 +9,12 @@ import { useNetwork, type NetworkConfig, type NetworkID } from "@/lib/api/networ
  * dimmed with a "not configured" hint and are non-selectable.
  */
 export function NetworkSwitcher() {
-  const { network, config, networks, setNetwork } = useNetwork();
+  const { network, config, networks, setNetwork, tenant } = useNetwork();
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
-  // Click-outside / Esc to close.
+  // Click-outside / Esc to close. Declared unconditionally so the rules
+  // of hooks hold across both render branches (apex vs tenant).
   useEffect(() => {
     if (!open) return;
     const onDocClick = (e: MouseEvent) => {
@@ -29,6 +30,32 @@ export function NetworkSwitcher() {
       document.removeEventListener("keydown", onKey);
     };
   }, [open]);
+
+  // Tenant mode: locked to a single firn instance, no switching.
+  // Render a static badge with the L1 label so the topbar still shows
+  // *which* L1 you're looking at.
+  if (tenant) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          padding: "5px 10px 5px 8px",
+          border: "1px solid var(--line)",
+          borderRadius: 999,
+          background: "var(--bg-elev)",
+          fontFamily: "var(--font-mono)",
+          fontSize: 12,
+          color: "var(--ink-2)",
+        }}
+        title={`firn @ ${config.url ?? ""}`}
+      >
+        <NetworkDot id="tenant" />
+        <span style={{ color: "var(--ink)", fontWeight: 500 }}>{tenant.label}</span>
+      </div>
+    );
+  }
 
   return (
     <div ref={containerRef} style={{ position: "relative", fontFamily: "var(--font-mono)" }}>
@@ -195,9 +222,14 @@ function NetworkOption({
 
 function NetworkDot({ id }: { id: NetworkID }) {
   // Subtle palette signaling. Local = neutral, testnet = warm, mainnet =
-  // accent. Keeps in line with the design system (no third-party brand reds).
+  // accent, tenant = accent (this *is* the only network in that mode).
+  // Keeps in line with the design system (no third-party brand reds).
   const color =
-    id === "mainnet" ? "var(--accent)" : id === "testnet" ? "var(--warn, #c08a3e)" : "var(--ink-3)";
+    id === "mainnet" || id === "tenant"
+      ? "var(--accent)"
+      : id === "testnet"
+        ? "var(--warn, #c08a3e)"
+        : "var(--ink-3)";
   return (
     <span
       aria-hidden
