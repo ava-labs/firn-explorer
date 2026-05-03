@@ -32,8 +32,9 @@ export function NetworkSwitcher() {
   }, [open]);
 
   // Tenant mode: locked to a single firn instance, no switching.
-  // Render a static badge with the L1 label so the topbar still shows
-  // *which* L1 you're looking at.
+  // Render a static "Testnet" badge — every managed L1 is Fuji, and
+  // the L1's chain name already lives in the topbar's left brand
+  // slot, so duplicating it here would be noise.
   if (tenant) {
     return (
       <div
@@ -49,10 +50,10 @@ export function NetworkSwitcher() {
           fontSize: 12,
           color: "var(--ink-2)",
         }}
-        title={`firn @ ${config.url ?? ""}`}
+        title={`firn @ ${config.url ?? ""} (${tenant.label})`}
       >
-        <NetworkDot id="tenant" />
-        <span style={{ color: "var(--ink)", fontWeight: 500 }}>{tenant.label}</span>
+        <NetworkDot id="testnet" />
+        <span style={{ color: "var(--ink)", fontWeight: 500 }}>Testnet</span>
       </div>
     );
   }
