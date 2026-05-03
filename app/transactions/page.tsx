@@ -3,9 +3,12 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useTransactions, useStats, useChain } from "@/lib/api/queries";
+import { useTransactions, useStats, useChain, useBlocks } from "@/lib/api/queries";
 import { useExplorerBootstrap } from "@/lib/api/explorer";
 import { ChartCard } from "@/components/page/chart-card";
+import { Sparkline } from "@/components/lattice/sparkline";
+import { Donut, type DonutSlice } from "@/components/lattice/donut";
+import { BarChart, type Bar } from "@/components/lattice/bar-chart";
 import { Hash } from "@/components/lattice/hash";
 import { Chip } from "@/components/lattice/chip";
 import { GenesisChip } from "@/components/lattice/genesis-chip";
@@ -15,7 +18,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { PauseButton } from "@/components/lattice/pause-button";
 import { ErrorBanner } from "@/components/page/error-banner";
 import { FilterBar, FilterInput, FilterPillGroup } from "@/components/lattice/filter-bar";
-import { KpiCell } from "@/components/page/kpi-cell";
 import { AnimatedNumber } from "@/components/lattice/animated-number";
 import {
   SortableTh,
@@ -32,7 +34,6 @@ import {
   formatNumber,
   formatRelativeTime,
   formatTxFee,
-  gasUtilTone,
 } from "@/lib/format";
 
 type SortKey = "status" | "value" | "fee" | "block";
@@ -73,20 +74,16 @@ export default function TransactionsPage() {
   // across the app) so this page mounting doesn't fan out a new fetch.
   const { data: bootstrap } = useExplorerBootstrap();
   const tpsSeries = bootstrap?.stats.tps.points;
-  const gasSeries = bootstrap?.stats.gasUtilization.points;
+  // Last 50 blocks for the per-hour gas-used bars. Sampling from the
+  // most recent window — labelled honestly on the card as "last N
+  // blocks" so it can't be misread as a 24h aggregate.
+  const { data: blocksPage } = useBlocks({ limit: 50 });
+  const blocksSample = blocksPage?.data;
   const txs = page?.data;
   const freshTxs = useFreshHashes(txs);
   const symbol = chain?.nativeToken.symbol ?? "—";
   // 10Hz so the "Xms ago" labels animate smoothly under sub-second arrival.
   useNowTick(100);
-
-  // 24h-derived TPS — gives a stable headline that matches what users see
-  // across page reloads. The instantaneous TPS lives on the home chart.
-  const tps24h = useMemo(() => {
-    const n = Number(stats?.transactionsLast24h);
-    if (!Number.isFinite(n) || n <= 0) return null;
-    return n / 86400;
-  }, [stats?.transactionsLast24h]);
 
   // Page-scoped success rate. Cheap to compute (page is bounded to 50)
   // and gives the user a sense of the current chain's health without
@@ -96,6 +93,93 @@ export default function TransactionsPage() {
     const ok = txs.filter((t) => t.status === "success").length;
     return (ok / txs.length) * 100;
   }, [txs]);
+
+  // TPS series mean + peak — labelled on the hero so the headline reads
+  // like the dashboard mockup ("444 tps avg · 612 peak"). The series is
+  // already server-smoothed (rolling avg per block), so peak is the
+  // smoothed max not a 1-block spike.
+  const tpsAvg = useMemo(() => {
+    if (!tpsSeries?.length) return null;
+    return tpsSeries.reduce((a, b) => a + b, 0) / tpsSeries.length;
+  }, [tpsSeries]);
+  const tpsPeak = useMemo(() => {
+    if (!tpsSeries?.length) return null;
+    return Math.max(...tpsSeries);
+  }, [tpsSeries]);
+
+  // Page-scoped fee + gas-used aggregates. Sample size = whatever the
+  // useTransactions limit gives us (50). Median over the visible page,
+  // not 24h — labelled "last N txs" so it can't be misread.
+  const feeAvg = useMemo(() => {
+    if (!txs?.length) return null;
+    let totalFee = BigInt(0);
+    let totalGas = 0;
+    for (const t of txs) {
+      try {
+        totalFee += BigInt(t.gas.price || "0") * BigInt(t.gas.used || 0);
+        totalGas += t.gas.used || 0;
+      } catch {
+        /* skip malformed */
+      }
+    }
+    if (totalGas === 0) return null;
+    // Return as { fee: bigint, gasAvg: number } so the card can format
+    // each side independently.
+    return { fee: totalFee / BigInt(txs.length), gasAvg: Math.round(totalGas / txs.length) };
+  }, [txs]);
+
+  // Method-mix donut: bin by `method.name` (or `selector` when name is
+  // unresolved). Native transfers (no selector) get their own bucket.
+  const methodSlices = useMemo<DonutSlice[]>(() => {
+    if (!txs?.length) return [];
+    const counts = new Map<string, number>();
+    for (const t of txs) {
+      const sel = t.method.selector;
+      const label = !sel || sel === "0x" ? "Native transfer" : (t.method.name ?? sel);
+      counts.set(label, (counts.get(label) ?? 0) + 1);
+    }
+    return Array.from(counts, ([label, value]) => ({ label, value }));
+  }, [txs]);
+
+  // Recent fee trend: chronological (oldest first → newest last) so the
+  // sparkline reads left-to-right like the throughput chart. Series is
+  // numeric AVAX-equivalent so a linear range makes visual sense; values
+  // are derived as gas.price * gas.used in wei, then normalized to gwei
+  // (fees on benchmark are too small in native to chart linearly).
+  const feeSeries = useMemo<number[] | undefined>(() => {
+    if (!txs?.length) return undefined;
+    const ONE_GWEI = BigInt(10) ** BigInt(9);
+    return [...txs].reverse().map((t) => {
+      try {
+        const wei = BigInt(t.gas.price || "0") * BigInt(t.gas.used || 0);
+        return Number((wei * BigInt(1000)) / ONE_GWEI) / 1000;
+      } catch {
+        return 0;
+      }
+    });
+  }, [txs]);
+
+  // Gas-used-per-bin bars derived from the recent blocks sample. Bin by
+  // 5-block windows so 50 sampled blocks produce 10 bars — readable at
+  // the card's width without crushing the bars to 1px each. Honest
+  // label; not "by hour" since the 50-block window is much shorter.
+  const gasBars = useMemo<Bar[]>(() => {
+    if (!blocksSample?.length) return [];
+    // blocks are returned newest-first; reverse for chronological bars.
+    const ordered = [...blocksSample].reverse();
+    const BIN = 5;
+    const bins: Bar[] = [];
+    for (let i = 0; i < ordered.length; i += BIN) {
+      const slice = ordered.slice(i, i + BIN);
+      let sum = 0;
+      for (const b of slice) {
+        sum += Number(b.gas.used || "0");
+      }
+      const startBlock = slice[0]?.number;
+      bins.push({ label: startBlock != null ? `#${startBlock}` : `${i}`, value: sum });
+    }
+    return bins;
+  }, [blocksSample]);
 
   const view = useMemo(() => {
     if (!txs) return txs;
@@ -134,72 +218,124 @@ export default function TransactionsPage() {
   return (
     <div className="px-4 sm:px-6 lg:px-10 py-6 sm:py-8 pb-12">
       <div className="eyebrow mb-2.5">Transactions</div>
-      <div className="flex items-baseline gap-3 mb-2">
-        <span className="h-display" style={{ fontSize: 56 }}>
-          Latest transactions
+
+      {/* Hero — the headline number is the chain-wide 24h tx count. The
+          sub-line carries supporting metrics from data we actually have:
+          recent-window TPS avg + peak (from the server-smoothed 50-block
+          series) and the page-scoped success rate. We do NOT show a
+          "vs prev 24h" delta — that needs backend snapshot tracking firn
+          doesn't expose today; faking it would be misleading. */}
+      <div className="flex items-baseline flex-wrap gap-3 mb-2">
+        {stats ? (
+          <span className="h-display" style={{ fontSize: 64, lineHeight: 1 }}>
+            <AnimatedNumber value={stats.transactionsLast24h} />
+          </span>
+        ) : (
+          <Skeleton className="h-[64px] w-[280px]" />
+        )}
+        <span style={{ fontSize: 17, color: "var(--ink-3)" }}>
+          transactions in the last 24 hours
         </span>
         <PauseButton feed="transactions" />
       </div>
-      <div className="mb-7" style={{ fontSize: 14, color: "var(--ink-3)" }}>
-        Live updates whenever a new transaction lands on chain.
-      </div>
-
-      {/* KPI strip — matches the home page hero KPI row visually so the page
-          feels like a focused continuation of the home transactions panel
-          rather than a different surface. */}
       <div
-        className="grid grid-cols-2 sm:grid-cols-4 mb-9"
-        style={{ borderTop: "1px solid var(--line)" }}
+        className="mono mb-9 flex flex-wrap items-baseline"
+        style={{ fontSize: 12.5, color: "var(--ink-3)", gap: "6px 18px" }}
       >
-        <KpiCell
-          first
-          label="Total transactions"
-          value={stats ? <AnimatedNumber value={stats.totalTransactions} /> : null}
-          sub={stats ? `${formatNumber(stats.transactionsLast24h)} last 24h` : ""}
-        />
-        <KpiCell
-          divider
-          label="Average TPS (24h)"
-          value={tps24h != null ? tps24h.toFixed(tps24h >= 100 ? 0 : 1) : null}
-          sub="rolling 24h average"
-        />
-        <KpiCell
-          divider
-          label="Median gas price"
-          value={stats ? formatGwei(stats.gasPrice.average) : null}
-          sub={
-            stats
-              ? `slow ${formatGwei(stats.gasPrice.slow)} · fast ${formatGwei(stats.gasPrice.fast)}`
-              : ""
-          }
-        />
-        <KpiCell
-          label="Success rate"
-          value={successRate != null ? `${successRate.toFixed(1)}%` : null}
-          sub={view ? `${formatNumber(view.length)} on this page` : ""}
-        />
+        {tpsAvg != null ? (
+          <span>
+            <span style={{ color: "var(--ink-2)" }}>{tpsAvg.toFixed(tpsAvg >= 100 ? 0 : 1)}</span>{" "}
+            tps avg
+          </span>
+        ) : null}
+        {tpsPeak != null ? (
+          <span>
+            <span style={{ color: "var(--ink-2)" }}>{tpsPeak.toFixed(tpsPeak >= 100 ? 0 : 1)}</span>{" "}
+            peak
+          </span>
+        ) : null}
+        {successRate != null ? (
+          <span>
+            <span style={{ color: "var(--ink-2)" }}>{(100 - successRate).toFixed(2)}%</span> fail
+            rate
+          </span>
+        ) : null}
+        {stats ? (
+          <span style={{ color: "var(--ink-4)" }}>
+            · {formatNumber(stats.totalTransactions)} all-time
+          </span>
+        ) : null}
       </div>
 
-      {/* Chart strip — same primitive (Sparkline) and styling as the home
-          page so the visual language is consistent across surfaces. Both
-          series are server-smoothed in firn (rolling-average per block,
-          50-point window). On the transactions index, throughput is the
-          headline; gas pressure rides alongside as a saturation signal
-          so the user can tell whether a TPS dip is "less work coming in"
-          or "chain pegged at gas limit". */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8 mb-8">
-        <ChartCard title="Throughput" unit="tx/s" series={tpsSeries} color="var(--good)" />
+      {/* Top dashboard row: main throughput chart on the left (~2/3),
+          stack of small KPI cards on the right (~1/3, 2x2 grid). Lines
+          up with the mockup's hero composition. */}
+      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-6 mb-8">
         <ChartCard
-          title="Block gas utilization"
-          unit="%"
-          series={gasSeries}
-          yMax={100}
-          color={
-            gasSeries && gasSeries.length > 0
-              ? gasUtilTone(gasSeries[gasSeries.length - 1])
-              : "var(--accent)"
-          }
+          title="Throughput · last 50 blocks"
+          unit="tx/s"
+          series={tpsSeries}
+          color="var(--good)"
         />
+        <div className="grid grid-cols-2 gap-6">
+          <MiniKpi
+            label="Median gas price"
+            value={stats ? formatGwei(stats.gasPrice.average) : null}
+            sub={stats ? `slow ${formatGwei(stats.gasPrice.slow)}` : ""}
+          />
+          <MiniKpi
+            label="Avg gas / tx"
+            value={feeAvg ? formatNumber(feeAvg.gasAvg) : null}
+            sub={txs ? `last ${txs.length} txs` : ""}
+          />
+          <MiniKpi
+            label="Avg fee / tx"
+            value={feeAvg ? formatTxFee(feeAvg.gasAvg, feeAvg.fee.toString(), symbol) : null}
+            sub={txs ? `last ${txs.length} txs` : ""}
+          />
+          <MiniKpi
+            label="Success rate"
+            value={successRate != null ? `${successRate.toFixed(1)}%` : null}
+            sub={txs ? `last ${txs.length} txs` : ""}
+          />
+        </div>
+      </div>
+
+      {/* Bottom dashboard row: gas bars · method mix donut · fee trend
+          line. Three equal cards stacked on small screens. Each card
+          is honest about its window — none of these are 24h aggregates,
+          they're recent-window samples. */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-9">
+        <div className="card border border-line rounded-[10px] bg-bg-elev" style={{ padding: 18 }}>
+          <div className="eyebrow mb-3">Gas used · last 50 blocks</div>
+          {gasBars.length ? (
+            <BarChart
+              fluid
+              bars={gasBars}
+              height={88}
+              tone="var(--ink-4)"
+              peakTone="var(--ink-2)"
+              leftLabel={gasBars[0]?.label}
+              rightLabel={gasBars[gasBars.length - 1]?.label}
+            />
+          ) : (
+            <Skeleton className="h-[88px] w-full" />
+          )}
+        </div>
+
+        <div className="card border border-line rounded-[10px] bg-bg-elev" style={{ padding: 18 }}>
+          <div className="eyebrow mb-3">Method mix · last {txs?.length ?? "—"} txs</div>
+          {methodSlices.length ? (
+            <Donut slices={methodSlices} size={120} thickness={14} />
+          ) : (
+            <Skeleton className="h-[120px] w-full" />
+          )}
+        </div>
+
+        <div className="card border border-line rounded-[10px] bg-bg-elev" style={{ padding: 18 }}>
+          <div className="eyebrow mb-3">Fee trend · last {feeSeries?.length ?? "—"} txs</div>
+          <ChartCardInline series={feeSeries} unit="gwei" />
+        </div>
       </div>
 
       <FilterBar
@@ -425,5 +561,69 @@ export default function TransactionsPage() {
         </table>
       </div>
     </div>
+  );
+}
+
+/**
+ * Compact KPI card for the right-hand 2x2 grid in the dashboard hero
+ * row. Smaller value typography than KpiCell so the four cards fit
+ * comfortably alongside the main throughput chart on lg screens.
+ */
+function MiniKpi({
+  label,
+  value,
+  sub,
+}: {
+  label: string;
+  value: React.ReactNode;
+  sub?: React.ReactNode;
+}) {
+  return (
+    <div
+      className="card border border-line rounded-[10px] bg-bg-elev"
+      style={{ padding: "14px 16px" }}
+    >
+      <div className="eyebrow mb-2">{label}</div>
+      <div className="h-display" style={{ fontSize: 24, lineHeight: 1.1 }}>
+        {value ?? <Skeleton className="h-7 w-20" />}
+      </div>
+      {sub != null ? (
+        <div className="mono mt-1.5" style={{ fontSize: 11, color: "var(--ink-4)" }}>
+          {sub}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Sparkline + "now" tag, frameless. Used in the bottom dashboard row
+ * where each card already has its own eyebrow header and we want a
+ * slimmer chart body than ChartCard provides.
+ */
+function ChartCardInline({ series, unit }: { series: number[] | undefined; unit: string }) {
+  const ready = series && series.length >= 2;
+  const last = ready ? series[series.length - 1] : null;
+  return (
+    <>
+      {ready ? (
+        <Sparkline fluid height={88} data={series} color="var(--good)" />
+      ) : (
+        <Skeleton className="h-[88px] w-full" />
+      )}
+      <div
+        className="mono mt-1.5"
+        style={{ fontSize: 11, color: "var(--ink-4)", textAlign: "right" }}
+      >
+        Now ·{" "}
+        <span style={{ color: "var(--ink-2)" }}>
+          {last == null
+            ? "—"
+            : last >= 100
+              ? `${Math.round(last)} ${unit}`
+              : `${last.toFixed(2)} ${unit}`}
+        </span>
+      </div>
+    </>
   );
 }
