@@ -12,6 +12,7 @@ export interface ExplorerStats {
   /** @minimum 0 */
   averageBlockTimeMs: number;
   gasPrice: GasPrice;
+  gasUtilization: ExplorerTPS;
   networkUtilization: number;
   totalAddresses: string;
   totalBlocks: string;

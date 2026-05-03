@@ -610,6 +610,9 @@
           "gasPrice": {
             "$ref": "#/components/schemas/GasPrice"
           },
+          "gasUtilization": {
+            "$ref": "#/components/schemas/ExplorerTPS"
+          },
           "networkUtilization": {
             "format": "double",
             "type": "number"
@@ -632,6 +635,7 @@
         },
         "required": [
           "tps",
+          "gasUtilization",
           "totalBlocks",
           "totalTransactions",
           "totalAddresses",
