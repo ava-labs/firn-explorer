@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useBlocks, useStats } from "@/lib/api/queries";
+import { useExplorerBootstrap } from "@/lib/api/explorer";
+import { ChartCard } from "@/components/page/chart-card";
 import { Hash } from "@/components/lattice/hash";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PauseButton } from "@/components/lattice/pause-button";
@@ -60,6 +62,12 @@ export default function BlocksPage() {
     to: toN,
   });
   const { data: stats } = useStats();
+  // Same chart series the home page consumes — server-smoothed, 50-block
+  // rolling window. Pulling from the bootstrap query (already cached) so
+  // mounting this page doesn't trigger a separate fetch.
+  const { data: bootstrap } = useExplorerBootstrap();
+  const tpsSeries = bootstrap?.stats.tps.points;
+  const gasSeries = bootstrap?.stats.gasUtilization.points;
 
   const blocks = page?.data;
   const freshBlocks = useFreshHashes(blocks);
@@ -192,6 +200,26 @@ export default function BlocksPage() {
           value={pageStats ? `${pageStats.emptyPct.toFixed(1)}%` : null}
           sub={view ? `${formatNumber(view.length)} on this page` : ""}
         />
+      </div>
+
+      {/* Chart strip — same primitive (Sparkline) and styling as the home
+          page so the visual language is consistent across surfaces. On
+          the blocks index, gas utilization is the headline (block-shape
+          signal); throughput rides alongside so the user can tell whether
+          a saturation spike is "many small txs" or "one fat tx". */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8 mb-8">
+        <ChartCard
+          title="Block gas utilization"
+          unit="%"
+          series={gasSeries}
+          yMax={100}
+          color={
+            gasSeries && gasSeries.length > 0
+              ? gasUtilTone(gasSeries[gasSeries.length - 1])
+              : "var(--accent)"
+          }
+        />
+        <ChartCard title="Throughput" unit="tx/s" series={tpsSeries} color="var(--accent)" />
       </div>
 
       <FilterBar
