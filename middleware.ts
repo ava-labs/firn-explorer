@@ -1,24 +1,31 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { lookupTenant } from "@/lib/api/tenants";
 
-// Subdomains that are NOT tenants: apex `firn.gg`, `www.firn.gg`, and the
-// per-deployment `*.vercel.app` URL Vercel mints for previews.
-const RESERVED = new Set(["", "www"]);
-
-const TENANT_HOST_RE = /^([^.]+)\.firn\.gg$/i;
+// Tenant slugs are the lowercased first 8 chars of the L1's blockchainID
+// (base58, with `0`, `l`, `o`, `I` already excluded by the cb58 alphabet).
+// Hardcoding the alphabet + length here turns the regex itself into the
+// reservation list:
+//   • `explorer.firn.gg` → contains `l` and `o`, can't match → falls
+//     through to apex behavior (the network switcher).
+//   • `www.firn.gg`, `api.firn.gg`, etc. → wrong length, can't match.
+//   • `*.vercel.app` preview URLs → don't match `firn.gg` at all.
+//
+// Anything that doesn't match this shape gets the apex experience —
+// no separate blocklist needed.
+const TENANT_HOST_RE = /^([123456789abcdefghijkmnpqrstuvwxyz]{8})\.firn\.gg$/i;
 
 const TENANT_API_PREFIX = "/api/firn/tenant/";
 
 export function middleware(request: NextRequest) {
   const host = (request.headers.get("host") ?? "").split(":")[0]; // strip :port for dev
   const m = host.match(TENANT_HOST_RE);
-  const slug = m && !RESERVED.has(m[1].toLowerCase()) ? m[1].toLowerCase() : null;
+  const slug = m ? m[1].toLowerCase() : null;
 
   // /api/firn/tenant/* → proxy to the backend for this host's tenant.
   if (request.nextUrl.pathname.startsWith(TENANT_API_PREFIX)) {
     if (!slug) {
       return NextResponse.json(
-        { error: "tenant routing requires a <slug>.firn.gg host" },
+        { error: "tenant routing requires an 8-char base58 slug at <slug>.firn.gg" },
         { status: 400 },
       );
     }
