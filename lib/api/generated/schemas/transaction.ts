@@ -12,6 +12,8 @@ import type { TransactionGas } from './transactionGas';
 
 export interface Transaction {
   block: BlockRef;
+  /** @nullable */
+  contractAddress: string | null;
   from: string;
   gas: TransactionGas;
   hash: string;
