@@ -2,9 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useBlocks, useStats } from "@/lib/api/queries";
+import { useBlocks, useStats, useChain } from "@/lib/api/queries";
 import { useExplorerBootstrap } from "@/lib/api/explorer";
-import { ChartCard } from "@/components/page/chart-card";
 import { Sparkline } from "@/components/lattice/sparkline";
 import { Donut, type DonutSlice } from "@/components/lattice/donut";
 import { BarChart, type Bar } from "@/components/lattice/bar-chart";
@@ -64,25 +63,18 @@ export default function BlocksPage() {
     to: toN,
   });
   const { data: stats } = useStats();
+  const { data: chain } = useChain();
   // Same chart series the home page consumes — server-smoothed, 50-block
   // rolling window. Pulling from the bootstrap query (already cached) so
   // mounting this page doesn't trigger a separate fetch.
   const { data: bootstrap } = useExplorerBootstrap();
   const gasSeries = bootstrap?.stats.gasUtilization.points;
+  const symbol = chain?.nativeToken.symbol ?? "—";
 
   const blocks = page?.data;
   const freshBlocks = useFreshHashes(blocks);
   // 10Hz so age labels animate smoothly through Xms → s → m boundaries.
   useNowTick(100);
-
-  // Live BPS derived from the rolling block-time average. One scalar so
-  // the user can compare against the stale "average block time" KPI on
-  // the same row.
-  const bps = useMemo(() => {
-    const ms = stats?.averageBlockTimeMs;
-    if (!ms || ms <= 0) return null;
-    return 1000 / ms;
-  }, [stats?.averageBlockTimeMs]);
 
   // Page-scoped averages — only across the visible page so it's responsive
   // to any filter the user applied. Useful when scoping by validator: you
@@ -108,16 +100,6 @@ export default function BlocksPage() {
     };
   }, [blocks]);
 
-  // Txns-per-block bar series for the dashboard bottom row. Bars are
-  // chronological (oldest left → newest right) so the chart reads like
-  // a tape of recent activity. The tallest bar is highlighted as peak.
-  const txnsBars = useMemo<Bar[]>(() => {
-    if (!blocks?.length) return [];
-    return [...blocks]
-      .reverse()
-      .map((b) => ({ label: `#${b.number}`, value: b.transactionsCount }));
-  }, [blocks]);
-
   // Validator-distribution donut from the visible page sample. Honest
   // window labelling — we don't pretend it's all-time. With a single
   // validator in benchmark mode this collapses to one slice; on a real
@@ -134,12 +116,83 @@ export default function BlocksPage() {
     return Array.from(counts, ([label, value]) => ({ label, value }));
   }, [blocks]);
 
-  // Block-size trend (chronological) — one number per block so the
-  // sparkline density matches gas/txns charts above.
-  const sizeSeries = useMemo<number[] | undefined>(() => {
-    if (!blocks?.length) return undefined;
-    return [...blocks].reverse().map((b) => b.size || 0);
+  // Inter-block deltas (ms) computed from consecutive block timestamps,
+  // walking blocks oldest → newest. Stats summary (p50/p95/p99) and
+  // distribution histogram both derive from this. Tolerates malformed
+  // timestamps by skipping the offending pair.
+  const blockDeltas = useMemo<number[]>(() => {
+    if (!blocks || blocks.length < 2) return [];
+    const ordered = [...blocks].reverse();
+    const out: number[] = [];
+    for (let i = 1; i < ordered.length; i++) {
+      const prev = Date.parse(ordered[i - 1].timestamp);
+      const curr = Date.parse(ordered[i].timestamp);
+      if (Number.isFinite(prev) && Number.isFinite(curr) && curr > prev) {
+        out.push(curr - prev);
+      }
+    }
+    return out;
   }, [blocks]);
+
+  const blockTimeStats = useMemo(() => {
+    if (blockDeltas.length === 0) return null;
+    const sorted = [...blockDeltas].sort((a, b) => a - b);
+    const at = (q: number) => sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))];
+    return {
+      p50: at(0.5),
+      p95: at(0.95),
+      p99: at(0.99),
+    };
+  }, [blockDeltas]);
+
+  // Block-time distribution histogram. Buckets chosen to read like
+  // operator-eye perspective: most chains cluster around their target
+  // block rate, so the middle bins are the interesting ones. <1.5s and
+  // >6s are tail bins so a long-tail event (network blip, validator
+  // pause) is visible without dominating the y-axis.
+  const blockTimeBuckets = useMemo<Bar[]>(() => {
+    if (blockDeltas.length === 0) return [];
+    const bins = [
+      { label: "<1.5s", lo: 0, hi: 1500 },
+      { label: "1.5–2s", lo: 1500, hi: 2000 },
+      { label: "2–2.5s", lo: 2000, hi: 2500 },
+      { label: "2.5–3s", lo: 2500, hi: 3000 },
+      { label: "3–4s", lo: 3000, hi: 4000 },
+      { label: "4–6s", lo: 4000, hi: 6000 },
+      { label: ">6s", lo: 6000, hi: Number.POSITIVE_INFINITY },
+    ];
+    const counts = bins.map(() => 0);
+    for (const d of blockDeltas) {
+      for (let i = 0; i < bins.length; i++) {
+        if (d >= bins[i].lo && d < bins[i].hi) {
+          counts[i]++;
+          break;
+        }
+      }
+    }
+    return bins.map((b, i) => ({ label: b.label, value: counts[i] }));
+  }, [blockDeltas]);
+
+  // Distinct producer count from the visible page sample. On a real
+  // network this proxies "active producer count over recent activity",
+  // which is what operators want to see at a glance.
+  const distinctProducers = useMemo(() => {
+    if (!blocks?.length) return null;
+    const seen = new Set<string>();
+    for (const b of blocks) {
+      if (b.miner) seen.add(b.miner);
+    }
+    return seen.size;
+  }, [blocks]);
+
+  // Estimated 24h block count derived from rolling avg block time. If
+  // the chain settles at 2s blocks, that's ~43,200 blocks/day. This is
+  // an estimate — real backend tracking would be exact.
+  const blocks24hEstimate = useMemo(() => {
+    const ms = stats?.averageBlockTimeMs;
+    if (!ms || ms <= 0) return null;
+    return Math.round(86400000 / ms);
+  }, [stats?.averageBlockTimeMs]);
 
   const view = useMemo(() => {
     if (!blocks) return blocks;
@@ -189,23 +242,30 @@ export default function BlocksPage() {
     setEmptyFilter("any");
   }
 
+  const headBlock = blocks?.[0];
+
   return (
     <div className="px-4 sm:px-6 lg:px-10 py-6 sm:py-8 pb-12">
-      <div className="eyebrow mb-2.5">Blocks</div>
+      <div className="eyebrow mb-2.5">Blocks{chain?.name ? ` · ${chain.name}` : ""}</div>
 
-      {/* Hero — chain-wide block count as the headline. Sub-line carries
-          supporting metrics derived from data we have (rolling avg block
-          time, computed BPS). No "vs prev 24h" delta — that needs
-          backend snapshot tracking firn doesn't expose today. */}
+      {/* Hero — at-the-head block number is the headline; tells operators
+          "this is what the chain is doing right now" rather than the
+          stale all-time count. Producers active count is page-scoped
+          since 24h tracking would need a backend aggregate. */}
       <div className="flex items-baseline flex-wrap gap-3 mb-2">
-        {stats ? (
+        {headBlock ? (
           <span className="h-display" style={{ fontSize: 64, lineHeight: 1 }}>
-            <AnimatedNumber value={stats.totalBlocks} />
+            #<AnimatedNumber value={headBlock.number} />
           </span>
         ) : (
-          <Skeleton className="h-[64px] w-[280px]" />
+          <Skeleton className="h-[64px] w-[320px]" />
         )}
-        <span style={{ fontSize: 17, color: "var(--ink-3)" }}>blocks produced</span>
+        <span style={{ fontSize: 17, color: "var(--ink-3)" }}>
+          at the head
+          {distinctProducers != null
+            ? ` · ${formatNumber(distinctProducers)} producer${distinctProducers === 1 ? "" : "s"} active`
+            : ""}
+        </span>
         <PauseButton feed="blocks" />
       </div>
       <div
@@ -213,118 +273,177 @@ export default function BlocksPage() {
         style={{ fontSize: 12.5, color: "var(--ink-3)", gap: "6px 18px" }}
       >
         {stats?.averageBlockTimeMs ? (
-          <span>
-            <span style={{ color: "var(--ink-2)" }}>
-              {(stats.averageBlockTimeMs / 1000).toFixed(2)}s
-            </span>{" "}
-            avg block time
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <span className="live-dot" />
+            <span>
+              Producing every{" "}
+              <span style={{ color: "var(--good)" }}>
+                {(stats.averageBlockTimeMs / 1000).toFixed(2)}s
+              </span>
+            </span>
           </span>
         ) : null}
-        {bps != null ? (
+        {blocks24hEstimate != null ? (
           <span>
-            <span style={{ color: "var(--ink-2)" }}>{bps.toFixed(2)}</span> bps
+            <span style={{ color: "var(--ink-2)" }}>{formatNumber(blocks24hEstimate)}</span> blocks
+            / 24h <span style={{ color: "var(--ink-4)" }}>(est.)</span>
           </span>
         ) : null}
-        {pageStats ? (
-          <span>
-            <span style={{ color: "var(--ink-2)" }}>{pageStats.emptyPct.toFixed(1)}%</span> empty
-            (page)
-          </span>
-        ) : null}
-        {pageStats ? (
-          <span>
-            <span style={{ color: "var(--ink-2)" }}>{pageStats.avgTxns.toFixed(1)}</span> txns/block
-            (page)
+        {stats ? (
+          <span style={{ color: "var(--ink-4)" }}>
+            · {formatNumber(stats.totalBlocks)} all-time
           </span>
         ) : null}
       </div>
 
-      {/* Top dashboard row: main gas-utilization chart on the left (~2/3),
-          stack of small KPI cards on the right (~1/3, 2x2 grid). */}
-      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-6 mb-8">
-        <ChartCard
-          title="Block gas utilization · last 50 blocks"
-          unit="%"
-          series={gasSeries}
-          yMax={100}
-          color={
-            gasSeries && gasSeries.length > 0
-              ? gasUtilTone(gasSeries[gasSeries.length - 1])
-              : "var(--good)"
-          }
+      {/* Top dashboard row: live-blocks list on the left, 2x2 KPI grid
+          on the right. Mirrors the mockup composition. */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-6 mb-8">
+        <LiveBlocksList
+          blocks={blocks?.slice(0, 5)}
+          freshHashes={freshBlocks}
+          symbol={symbol}
+          onClick={(num) => router.push(`/blocks/${num}`)}
         />
         <div className="grid grid-cols-2 gap-6">
           <MiniKpi
-            label="Avg gas % (page)"
+            label="Avg block time"
+            value={
+              stats?.averageBlockTimeMs ? `${(stats.averageBlockTimeMs / 1000).toFixed(2)}s` : null
+            }
+            sub={
+              blockTimeStats ? (
+                <span style={{ color: "var(--good)" }}>
+                  p50 {(blockTimeStats.p50 / 1000).toFixed(2)}s · p95{" "}
+                  {(blockTimeStats.p95 / 1000).toFixed(2)}s
+                </span>
+              ) : (
+                ""
+              )
+            }
+          />
+          <MiniKpi
+            label="Avg gas / block"
             value={pageStats ? `${pageStats.avgGasPct.toFixed(1)}%` : null}
-            sub={view ? `${formatNumber(view.length)} blocks` : ""}
+            sub={
+              headBlock ? `of ${(Number(headBlock.gas.limit) / 1_000_000).toFixed(0)}M target` : ""
+            }
           />
           <MiniKpi
-            label="Avg block size"
-            value={pageStats ? formatBlockSize(Math.round(pageStats.avgSize)) : null}
-            sub={view ? `${formatNumber(view.length)} blocks` : ""}
+            label="Avg txs / block"
+            value={pageStats ? formatNumber(Math.round(pageStats.avgTxns)) : null}
+            sub={pageStats ? `${formatBlockSize(Math.round(pageStats.avgSize))} avg size` : ""}
           />
           <MiniKpi
-            label="Avg txns / block"
-            value={pageStats ? pageStats.avgTxns.toFixed(1) : null}
-            sub={pageStats ? `${pageStats.emptyPct.toFixed(1)}% empty` : ""}
-          />
-          <MiniKpi
-            label="Live BPS"
-            value={bps != null ? bps.toFixed(2) : null}
-            sub="blocks per second"
+            label="Empty %"
+            value={pageStats ? `${pageStats.emptyPct.toFixed(1)}%` : null}
+            sub={view ? `${formatNumber(view.length)} sampled` : ""}
           />
         </div>
       </div>
 
-      {/* Bottom dashboard row: txns-per-block bars · validator donut ·
-          block-size trend. Each card carries an honest sample-window
-          label so it can't be misread as a chain-wide aggregate. */}
+      {/* Middle row: gas % chart · block time distribution · producer
+          share. Each carries honest sample-window labelling. */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-9">
         <div className="card border border-line rounded-[10px] bg-bg-elev" style={{ padding: 18 }}>
-          <div className="eyebrow mb-3">Txns / block · last {blocks?.length ?? "—"}</div>
-          {txnsBars.length ? (
-            <BarChart
-              fluid
-              bars={txnsBars}
-              height={88}
-              tone="var(--ink-4)"
-              peakTone="var(--good)"
-              leftLabel={txnsBars[0]?.label}
-              rightLabel={txnsBars[txnsBars.length - 1]?.label}
-            />
+          <div className="flex items-baseline justify-between mb-3">
+            <div className="eyebrow">Gas used %</div>
+            <div className="mono" style={{ fontSize: 10.5, color: "var(--ink-4)" }}>
+              last 50 blocks
+            </div>
+          </div>
+          {gasSeries && gasSeries.length >= 2 ? (
+            <div style={{ position: "relative" }}>
+              <Sparkline
+                fluid
+                height={120}
+                data={gasSeries}
+                yMax={100}
+                color={gasUtilTone(gasSeries[gasSeries.length - 1])}
+              />
+              {/* Target reference line at 50% — operator's eye reaches
+                  for "is this chain healthy" first. Drawn as an HTML
+                  overlay rather than inside the SVG so it doesn't
+                  stretch with preserveAspectRatio=none. */}
+              <div
+                style={{
+                  position: "absolute",
+                  left: 0,
+                  right: 0,
+                  top: 60,
+                  borderTop: "1px dashed var(--ink-5)",
+                  pointerEvents: "none",
+                }}
+              />
+              <div
+                className="mono"
+                style={{
+                  position: "absolute",
+                  right: 0,
+                  top: 64,
+                  fontSize: 10,
+                  color: "var(--ink-4)",
+                }}
+              >
+                target 50%
+              </div>
+            </div>
           ) : (
-            <Skeleton className="h-[88px] w-full" />
+            <Skeleton className="h-[120px] w-full" />
           )}
+          <div
+            className="mono mt-1.5 flex items-baseline justify-between"
+            style={{ fontSize: 10.5, color: "var(--ink-4)" }}
+          >
+            <span>50 blk ago</span>
+            <span style={{ color: "var(--ink-3)" }}>
+              now ·{" "}
+              {gasSeries && gasSeries.length > 0
+                ? `${Math.round(gasSeries[gasSeries.length - 1])}%`
+                : "—"}
+            </span>
+          </div>
         </div>
 
         <div className="card border border-line rounded-[10px] bg-bg-elev" style={{ padding: 18 }}>
-          <div className="eyebrow mb-3">Validator mix · last {blocks?.length ?? "—"} blocks</div>
+          <div className="eyebrow mb-3">Block time distribution</div>
+          {blockTimeBuckets.length ? (
+            <BarChart
+              fluid
+              bars={blockTimeBuckets}
+              height={120}
+              tone="var(--ink-4)"
+              peakTone="var(--accent)"
+            />
+          ) : (
+            <Skeleton className="h-[120px] w-full" />
+          )}
+          <div
+            className="mono mt-2 flex items-baseline justify-between"
+            style={{ fontSize: 10.5, color: "var(--ink-4)" }}
+          >
+            <span>{blockTimeBuckets[0]?.label ?? ""}</span>
+            <span style={{ color: "var(--ink-3)" }}>
+              {blockTimeStats
+                ? `p50 ${(blockTimeStats.p50 / 1000).toFixed(2)}s · p95 ${(blockTimeStats.p95 / 1000).toFixed(2)}s`
+                : "—"}
+            </span>
+            <span>{blockTimeBuckets[blockTimeBuckets.length - 1]?.label ?? ""}</span>
+          </div>
+        </div>
+
+        <div className="card border border-line rounded-[10px] bg-bg-elev" style={{ padding: 18 }}>
+          <div className="flex items-baseline justify-between mb-3">
+            <div className="eyebrow">Producer share</div>
+            <div className="mono" style={{ fontSize: 10.5, color: "var(--ink-4)" }}>
+              last {blocks?.length ?? "—"}
+            </div>
+          </div>
           {validatorSlices.length ? (
             <Donut slices={validatorSlices} size={120} thickness={14} />
           ) : (
             <Skeleton className="h-[120px] w-full" />
           )}
-        </div>
-
-        <div className="card border border-line rounded-[10px] bg-bg-elev" style={{ padding: 18 }}>
-          <div className="eyebrow mb-3">Block size · last {sizeSeries?.length ?? "—"} blocks</div>
-          {sizeSeries && sizeSeries.length >= 2 ? (
-            <Sparkline fluid height={88} data={sizeSeries} color="var(--ink-3)" />
-          ) : (
-            <Skeleton className="h-[88px] w-full" />
-          )}
-          <div
-            className="mono mt-1.5"
-            style={{ fontSize: 11, color: "var(--ink-4)", textAlign: "right" }}
-          >
-            Now ·{" "}
-            <span style={{ color: "var(--ink-2)" }}>
-              {sizeSeries && sizeSeries.length > 0
-                ? formatBlockSize(sizeSeries[sizeSeries.length - 1])
-                : "—"}
-            </span>
-          </div>
         </div>
       </div>
 
@@ -554,6 +673,176 @@ function parseUintMaybe(s: string): number | undefined {
   const n = Number(t);
   if (!Number.isFinite(n) || n < 0 || !Number.isInteger(n)) return undefined;
   return n;
+}
+
+/**
+ * Card that lists the last few blocks vertically with the latest one
+ * highlighted. Replaces a chart in the dashboard hero row because for
+ * blocks specifically, "what's happening right now" reads better as a
+ * tape of the last 5 events than as an aggregate trend.
+ *
+ * The latest row gets a soft accent-soft background so the eye finds
+ * it instantly; freshHashes (set by useFreshHashes) carries the
+ * row-arrived flash on top of that.
+ */
+function LiveBlocksList({
+  blocks,
+  freshHashes,
+  symbol,
+  onClick,
+}: {
+  blocks:
+    | Array<{
+        number: number;
+        hash: string;
+        timestamp: string;
+        miner?: string;
+        transactionsCount: number;
+        gas: { used: string; limit: string };
+      }>
+    | undefined;
+  freshHashes: ReadonlySet<string>;
+  symbol: string;
+  onClick: (num: number) => void;
+}) {
+  void symbol; // reserved for a future per-row reward column
+  return (
+    <div
+      className="card overflow-hidden border border-line rounded-[10px] bg-bg-elev"
+      style={{ padding: 0 }}
+    >
+      <div
+        className="flex items-center justify-between border-b border-line"
+        style={{ padding: "14px 18px" }}
+      >
+        <div className="flex items-center gap-2">
+          <span className="live-dot" />
+          <span style={{ fontSize: 12, fontWeight: 500 }}>Live blocks</span>
+        </div>
+        <span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>
+          auto-refreshing
+        </span>
+      </div>
+      <div>
+        {!blocks ? (
+          Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="px-[18px] py-3.5">
+              <Skeleton className="h-4 w-full" />
+            </div>
+          ))
+        ) : blocks.length === 0 ? (
+          <div className="text-center py-12" style={{ color: "var(--ink-4)", fontSize: 13 }}>
+            Waiting for first block…
+          </div>
+        ) : (
+          blocks.map((b, i) => {
+            const pct = gasUsedPctNum(b.gas.used, b.gas.limit);
+            const isHead = i === 0;
+            return (
+              <button
+                key={b.hash}
+                type="button"
+                onClick={() => onClick(b.number)}
+                className={`grid items-center w-full text-left ${freshHashes.has(b.hash) ? "fresh-row" : ""}`}
+                style={{
+                  gridTemplateColumns: "120px 1fr 80px",
+                  padding: "14px 18px",
+                  borderBottom: i < blocks.length - 1 ? "1px solid var(--line-soft)" : 0,
+                  background: isHead ? "var(--accent-soft)" : "transparent",
+                  color: isHead ? "var(--accent-ink)" : "inherit",
+                  cursor: "pointer",
+                  border: "none",
+                  borderRadius: 0,
+                }}
+              >
+                <div>
+                  <div
+                    className="mono"
+                    style={{
+                      fontSize: 13,
+                      color: isHead ? "var(--accent-ink)" : "var(--ink)",
+                      fontVariantNumeric: "tabular-nums",
+                    }}
+                  >
+                    #{formatNumber(b.number)}
+                  </div>
+                  <div
+                    className="mono"
+                    style={{
+                      fontSize: 11,
+                      color: isHead ? "var(--accent-ink)" : "var(--ink-4)",
+                      fontVariantNumeric: "tabular-nums",
+                      opacity: 0.85,
+                    }}
+                  >
+                    <span style={{ display: "inline-block", minWidth: 56 }}>
+                      {formatRelativeTime(b.timestamp)}
+                    </span>
+                  </div>
+                </div>
+                <div>
+                  <div
+                    style={{
+                      fontSize: 12.5,
+                      color: isHead ? "var(--accent-ink)" : "var(--ink-2)",
+                      fontVariantNumeric: "tabular-nums",
+                    }}
+                  >
+                    {formatNumber(b.transactionsCount)}{" "}
+                    <span style={{ color: isHead ? "var(--accent-ink)" : "var(--ink-4)" }}>
+                      txns
+                    </span>
+                  </div>
+                  <div
+                    className="mono"
+                    style={{
+                      fontSize: 10.5,
+                      color: isHead ? "var(--accent-ink)" : "var(--ink-4)",
+                      opacity: 0.85,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                    title={b.miner || ""}
+                  >
+                    {b.miner ? `by ${b.miner.slice(0, 6)}…${b.miner.slice(-4)}` : ""}
+                  </div>
+                </div>
+                <div
+                  className="mono"
+                  style={{
+                    fontSize: 12,
+                    color: isHead ? "var(--accent-ink)" : "var(--ink-2)",
+                    textAlign: "right",
+                    fontVariantNumeric: "tabular-nums",
+                  }}
+                >
+                  {gasUsedPct(b.gas.used, b.gas.limit)}
+                  <div
+                    style={{
+                      height: 3,
+                      marginTop: 4,
+                      borderRadius: 99,
+                      background: "var(--bg-sunken)",
+                      overflow: "hidden",
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: `${Math.min(100, pct)}%`,
+                        height: "100%",
+                        background: isHead ? "var(--accent-ink)" : gasUtilTone(pct),
+                      }}
+                    />
+                  </div>
+                </div>
+              </button>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
 }
 
 /**
