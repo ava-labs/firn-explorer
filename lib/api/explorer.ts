@@ -100,17 +100,16 @@ export function useExplorerBootstrap(opts?: QueryOpts<ExplorerBootstrap>) {
  * non-null shapes the components were written against.
  */
 function normalizeBootstrap(b: GeneratedExplorerBootstrap): ExplorerBootstrap {
-  // Gas series rides parallel to TPS in the spec; older firn deployments
-  // that predate the field land here as undefined — fall back to a
-  // zero-padded array so the chart stays mounted instead of unmounting
-  // on a stale backend.
-  const gas =
-    (b.stats as { gasUtilization?: ExplorerTPS }).gasUtilization ??
-    ({
-      cadence: "block",
-      windowSize: b.stats.tps?.windowSize ?? 50,
-      points: new Array(b.stats.tps?.points?.length ?? 50).fill(0),
-    } satisfies ExplorerTPS);
+  // Gas series rides parallel to TPS in the spec; tolerate three states
+  // for older / freshly-bootstrapped backends: field missing entirely
+  // (older firn), field present with null points (chdb empty-array
+  // marshaling), or normal populated points.
+  const tpsWindow = b.stats.tps?.windowSize ?? 50;
+  const tpsLen = b.stats.tps?.points?.length ?? tpsWindow;
+  const rawGas = (b.stats as { gasUtilization?: ExplorerTPS | null }).gasUtilization;
+  const gas: ExplorerTPS = rawGas
+    ? { ...rawGas, points: rawGas.points ?? new Array(tpsLen).fill(0) }
+    : { cadence: "block", windowSize: tpsWindow, points: new Array(tpsLen).fill(0) };
   return {
     tick: b.tick,
     chain: b.chain,
@@ -242,11 +241,18 @@ function mergeTickIntoBootstrap(
       ...new Array(advance).fill(tick.tpsPoint),
     ].slice(-prev.stats.tps.windowSize);
     // Gas series rolls in lockstep with TPS — same advance, same window.
-    // Tolerate older firn that doesn't ship gasPoint by holding the last
-    // sample so the chart doesn't stutter to zero.
-    const gasPrev = prev.stats.gasUtilization;
-    const gasNew = tick.gasPoint ?? gasPrev.points[gasPrev.points.length - 1] ?? 0;
-    const gasPoints = [...gasPrev.points.slice(advance), ...new Array(advance).fill(gasNew)].slice(
+    // Tolerate older firn that doesn't ship gasUtilization at all (field
+    // missing) and the spec's `points: number[] | null` shape (chdb
+    // returns null for empty arrays). Fall back to a zero-padded series
+    // sized to match the TPS window so the chart geometry is stable.
+    const gasPrev = prev.stats.gasUtilization ?? {
+      cadence: "block" as const,
+      windowSize: prev.stats.tps.windowSize,
+      points: new Array(prev.stats.tps.windowSize).fill(0),
+    };
+    const gasPrevPoints = gasPrev.points ?? [];
+    const gasNew = tick.gasPoint ?? gasPrevPoints[gasPrevPoints.length - 1] ?? 0;
+    const gasPoints = [...gasPrevPoints.slice(advance), ...new Array(advance).fill(gasNew)].slice(
       -gasPrev.windowSize,
     );
 
