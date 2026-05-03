@@ -322,6 +322,16 @@
     flex: none;
   }
 
+  /* Sparkline cursor (the dot pinned to the latest sample). Lives as
+     an HTML element rather than an SVG <circle> so it stays a true
+     circle when the SVG is stretched non-uniformly with
+     preserveAspectRatio=none. Color is threaded in by the component
+     via the --sparkline-cursor-color CSS variable so the halo always
+     matches the line. */
+  .sparkline-cursor {
+    animation: pulse-sparkline-cursor 1.6s ease-out infinite;
+  }
+
   .page-fade {
     /* Subtle entrance for the active route's content. Runs on initial load
        and on every client navigation — Next 16 templates auto-key per
@@ -434,6 +444,19 @@
   }
   100% {
     box-shadow: 0 0 0 5px color-mix(in oklab, var(--good) 0%, transparent);
+  }
+}
+
+@keyframes pulse-sparkline-cursor {
+  /* Same alpha-only interpolation pattern as pulse-ring, but driven by
+     the per-instance --sparkline-cursor-color so each chart's cursor
+     halo matches its line color (red gas tone vs neutral throughput,
+     etc.). */
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--sparkline-cursor-color) 45%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 7px color-mix(in oklab, var(--sparkline-cursor-color) 0%, transparent);
   }
 }
 

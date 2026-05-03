@@ -188,7 +188,7 @@ export default function TransactionsPage() {
           so the user can tell whether a TPS dip is "less work coming in"
           or "chain pegged at gas limit". */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8 mb-8">
-        <ChartCard title="Throughput" unit="tx/s" series={tpsSeries} color="var(--accent)" />
+        <ChartCard title="Throughput" unit="tx/s" series={tpsSeries} color="var(--good)" />
         <ChartCard
           title="Block gas utilization"
           unit="%"
