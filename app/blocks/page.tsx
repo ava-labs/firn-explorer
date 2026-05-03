@@ -2,11 +2,14 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useBlocks } from "@/lib/api/queries";
+import { useBlocks, useStats } from "@/lib/api/queries";
 import { Hash } from "@/components/lattice/hash";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PauseButton } from "@/components/lattice/pause-button";
 import { FilterBar, FilterInput, FilterPillGroup } from "@/components/lattice/filter-bar";
+import { KpiCell } from "@/components/page/kpi-cell";
+import { AnimatedNumber } from "@/components/lattice/animated-number";
+import { ErrorBanner } from "@/components/page/error-banner";
 import {
   SortableTh,
   applyDir,
@@ -15,9 +18,17 @@ import {
   compareNumeric,
   type SortState,
 } from "@/components/lattice/sortable-th";
-import { formatNumber, formatRelativeTime } from "@/lib/format";
+import { useFreshHashes, useNowTick } from "@/lib/use-fresh";
+import {
+  formatBlockSize,
+  formatNumber,
+  formatRelativeTime,
+  gasUsedPct,
+  gasUsedPctNum,
+  gasUtilTone,
+} from "@/lib/format";
 
-type SortKey = "number" | "txns" | "gas" | "validator" | "age";
+type SortKey = "number" | "txns" | "gas" | "gasPct" | "size" | "validator" | "age";
 type EmptyFilter = "any" | "withTxns" | "empty";
 
 const EMPTY_OPTIONS = [
@@ -48,8 +59,42 @@ export default function BlocksPage() {
     from: fromN,
     to: toN,
   });
+  const { data: stats } = useStats();
 
   const blocks = page?.data;
+  const freshBlocks = useFreshHashes(blocks);
+  // 10Hz so age labels animate smoothly through Xms → s → m boundaries.
+  useNowTick(100);
+
+  // Live BPS derived from the rolling block-time average. One scalar so
+  // the user can compare against the stale "average block time" KPI on
+  // the same row.
+  const bps = useMemo(() => {
+    const ms = stats?.averageBlockTimeMs;
+    if (!ms || ms <= 0) return null;
+    return 1000 / ms;
+  }, [stats?.averageBlockTimeMs]);
+
+  // Page-scoped averages — only across the visible page so it's responsive
+  // to any filter the user applied. Useful when scoping by validator: you
+  // can see what gas pressure / block size looks like for that operator
+  // specifically without re-pulling.
+  const pageStats = useMemo(() => {
+    if (!blocks?.length) return null;
+    let gasPctSum = 0;
+    let txCount = 0;
+    let emptyCount = 0;
+    for (const b of blocks) {
+      gasPctSum += gasUsedPctNum(b.gas.used, b.gas.limit);
+      txCount += b.transactionsCount;
+      if (b.transactionsCount === 0) emptyCount++;
+    }
+    return {
+      avgGasPct: gasPctSum / blocks.length,
+      avgTxns: txCount / blocks.length,
+      emptyPct: (emptyCount / blocks.length) * 100,
+    };
+  }, [blocks]);
 
   const view = useMemo(() => {
     if (!blocks) return blocks;
@@ -69,6 +114,12 @@ export default function BlocksPage() {
               return compareNumeric(a.transactionsCount, b.transactionsCount);
             case "gas":
               return compareBig(a.gas.used, b.gas.used);
+            case "gasPct":
+              return (
+                gasUsedPctNum(a.gas.used, a.gas.limit) - gasUsedPctNum(b.gas.used, b.gas.limit)
+              );
+            case "size":
+              return compareNumeric(a.size, b.size);
             case "validator":
               return (a.miner ?? "").localeCompare(b.miner ?? "");
             case "age":
@@ -107,6 +158,42 @@ export default function BlocksPage() {
         read.
       </div>
 
+      {/* KPI strip — chain-wide on the left, page-scoped on the right.
+          The page-scoped cells respect the active filters so a validator
+          filter immediately reveals that operator's block-shape. */}
+      <div
+        className="grid grid-cols-2 sm:grid-cols-4 mb-9"
+        style={{ borderTop: "1px solid var(--line)" }}
+      >
+        <KpiCell
+          first
+          label="Total blocks"
+          value={stats ? <AnimatedNumber value={stats.totalBlocks} /> : null}
+          sub={
+            stats?.averageBlockTimeMs
+              ? `${(stats.averageBlockTimeMs / 1000).toFixed(2)}s avg block time`
+              : ""
+          }
+        />
+        <KpiCell
+          divider
+          label="Live BPS"
+          value={bps != null ? bps.toFixed(2) : null}
+          sub="blocks per second"
+        />
+        <KpiCell
+          divider
+          label="Avg gas % (page)"
+          value={pageStats ? `${pageStats.avgGasPct.toFixed(1)}%` : null}
+          sub={pageStats ? `${pageStats.avgTxns.toFixed(1)} txns/block` : ""}
+        />
+        <KpiCell
+          label="Empty % (page)"
+          value={pageStats ? `${pageStats.emptyPct.toFixed(1)}%` : null}
+          sub={view ? `${formatNumber(view.length)} on this page` : ""}
+        />
+      </div>
+
       <FilterBar
         active={filtersActive}
         onReset={reset}
@@ -142,22 +229,7 @@ export default function BlocksPage() {
         />
       </FilterBar>
 
-      {error ? (
-        <div
-          className="border rounded-md p-4 mb-6"
-          style={{
-            borderColor: "var(--accent-soft)",
-            background: "var(--accent-soft)",
-            color: "var(--accent-ink)",
-            fontSize: 13,
-          }}
-        >
-          <div style={{ fontWeight: 500, marginBottom: 4 }}>Couldn&apos;t load blocks</div>
-          <div className="mono" style={{ fontSize: 11.5, color: "var(--ink-3)" }}>
-            {error.message}
-          </div>
-        </div>
-      ) : null}
+      {error ? <ErrorBanner title="Couldn't load blocks" message={error.message} /> : null}
 
       <div className="card border border-line rounded-[10px] bg-bg-elev overflow-x-auto">
         <table className="lat-tbl">
@@ -167,18 +239,37 @@ export default function BlocksPage() {
                 Number
               </SortableTh>
               <th>Hash</th>
-              <SortableTh<SortKey> k="txns" active={sort} onSort={setSort} align="right" width={80}>
+              <SortableTh<SortKey> k="txns" active={sort} onSort={setSort} align="right" width={70}>
                 Txns
+              </SortableTh>
+              <SortableTh<SortKey>
+                k="gasPct"
+                active={sort}
+                onSort={setSort}
+                align="right"
+                width={130}
+              >
+                Gas %
               </SortableTh>
               <SortableTh<SortKey>
                 k="gas"
                 active={sort}
                 onSort={setSort}
                 align="right"
-                width={140}
-                className="hidden md:table-cell"
+                width={130}
+                className="hidden lg:table-cell"
               >
                 Gas used
+              </SortableTh>
+              <SortableTh<SortKey>
+                k="size"
+                active={sort}
+                onSort={setSort}
+                align="right"
+                width={90}
+                className="hidden md:table-cell"
+              >
+                Size
               </SortableTh>
               <SortableTh<SortKey>
                 k="validator"
@@ -197,57 +288,121 @@ export default function BlocksPage() {
             {isPending ? (
               Array.from({ length: 10 }).map((_, i) => (
                 <tr key={i}>
-                  <td colSpan={6}>
+                  <td colSpan={8}>
                     <Skeleton className="h-4 w-full" />
                   </td>
                 </tr>
               ))
             ) : view?.length ? (
-              view.map((block) => (
-                <tr
-                  key={block.hash}
-                  onClick={() => router.push(`/blocks/${block.number}`)}
-                  style={{ cursor: "pointer" }}
-                  role="link"
-                  aria-label={`Block ${block.number}`}
-                >
-                  <td className="mono" style={{ color: "var(--ink)" }}>
-                    #{formatNumber(block.number)}
-                  </td>
-                  <td>
-                    <Hash
-                      value={block.hash}
-                      tone="link"
-                      length={14}
-                      href={`/blocks/${block.number}`}
-                    />
-                  </td>
-                  <td className="mono" style={{ textAlign: "right", color: "var(--ink-2)" }}>
-                    {block.transactionsCount}
-                  </td>
-                  <td className="mono hidden md:table-cell" style={{ textAlign: "right" }}>
-                    {formatNumber(block.gas.used)}
-                  </td>
-                  <td className="hidden md:table-cell">
-                    {block.miner ? (
-                      <Hash
-                        value={block.miner}
-                        tone="dim"
-                        length={8}
-                        href={`/address/${block.miner}`}
-                      />
-                    ) : (
-                      <span style={{ color: "var(--ink-4)" }}>—</span>
-                    )}
-                  </td>
-                  <td className="mono" style={{ textAlign: "right", color: "var(--ink-4)" }}>
-                    {formatRelativeTime(block.timestamp)}
-                  </td>
-                </tr>
-              ))
+              view.map((b) => {
+                const pct = gasUsedPctNum(b.gas.used, b.gas.limit);
+                const tone = gasUtilTone(pct);
+                return (
+                  <tr
+                    key={b.hash}
+                    className={freshBlocks.has(b.hash) ? "fresh-row" : undefined}
+                    onClick={() => router.push(`/blocks/${b.number}`)}
+                    style={{ cursor: "pointer" }}
+                    role="link"
+                    aria-label={`Block ${b.number}`}
+                  >
+                    <td
+                      className="mono"
+                      style={{ color: "var(--ink)", fontVariantNumeric: "tabular-nums" }}
+                    >
+                      #{formatNumber(b.number)}
+                    </td>
+                    <td>
+                      <Hash value={b.hash} tone="link" length={14} href={`/blocks/${b.number}`} />
+                    </td>
+                    <td
+                      className="mono"
+                      style={{
+                        textAlign: "right",
+                        color: b.transactionsCount === 0 ? "var(--ink-4)" : "var(--ink-2)",
+                        fontVariantNumeric: "tabular-nums",
+                      }}
+                    >
+                      {b.transactionsCount}
+                    </td>
+                    {/* Gas % cell carries both the percentage and an inline
+                        utilization bar — same tone palette as the home page
+                        live blocks so the visual language is consistent. */}
+                    <td style={{ paddingTop: 8, paddingBottom: 8 }}>
+                      <div
+                        className="mono"
+                        style={{
+                          fontSize: 12,
+                          color: tone,
+                          textAlign: "right",
+                          fontVariantNumeric: "tabular-nums",
+                        }}
+                      >
+                        {gasUsedPct(b.gas.used, b.gas.limit)}
+                      </div>
+                      <div
+                        style={{
+                          height: 3,
+                          marginTop: 4,
+                          borderRadius: 99,
+                          background: "var(--bg-sunken)",
+                          overflow: "hidden",
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: `${Math.min(100, pct)}%`,
+                            height: "100%",
+                            background: tone,
+                          }}
+                        />
+                      </div>
+                    </td>
+                    <td
+                      className="mono hidden lg:table-cell"
+                      style={{
+                        textAlign: "right",
+                        color: "var(--ink-3)",
+                        fontVariantNumeric: "tabular-nums",
+                      }}
+                    >
+                      {formatNumber(b.gas.used)}
+                    </td>
+                    <td
+                      className="mono hidden md:table-cell"
+                      style={{
+                        textAlign: "right",
+                        color: "var(--ink-3)",
+                        fontVariantNumeric: "tabular-nums",
+                      }}
+                    >
+                      {formatBlockSize(b.size)}
+                    </td>
+                    <td className="hidden md:table-cell">
+                      {b.miner ? (
+                        <Hash value={b.miner} tone="dim" length={6} href={`/address/${b.miner}`} />
+                      ) : (
+                        <span style={{ color: "var(--ink-4)" }}>—</span>
+                      )}
+                    </td>
+                    <td
+                      className="mono"
+                      style={{
+                        textAlign: "right",
+                        color: "var(--ink-4)",
+                        fontVariantNumeric: "tabular-nums",
+                      }}
+                    >
+                      <span style={{ display: "inline-block", minWidth: 64, textAlign: "right" }}>
+                        {formatRelativeTime(b.timestamp)}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })
             ) : (
               <tr>
-                <td colSpan={6} className="text-center py-10" style={{ color: "var(--ink-4)" }}>
+                <td colSpan={8} className="text-center py-10" style={{ color: "var(--ink-4)" }}>
                   {filtersActive ? "No blocks match these filters." : "No blocks yet."}
                 </td>
               </tr>
