@@ -5,12 +5,14 @@ import { useRouter } from "next/navigation";
 import { useBlocks, useStats } from "@/lib/api/queries";
 import { useExplorerBootstrap } from "@/lib/api/explorer";
 import { ChartCard } from "@/components/page/chart-card";
+import { Sparkline } from "@/components/lattice/sparkline";
+import { Donut, type DonutSlice } from "@/components/lattice/donut";
+import { BarChart, type Bar } from "@/components/lattice/bar-chart";
+import { AnimatedNumber } from "@/components/lattice/animated-number";
 import { Hash } from "@/components/lattice/hash";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PauseButton } from "@/components/lattice/pause-button";
 import { FilterBar, FilterInput, FilterPillGroup } from "@/components/lattice/filter-bar";
-import { KpiCell } from "@/components/page/kpi-cell";
-import { AnimatedNumber } from "@/components/lattice/animated-number";
 import { ErrorBanner } from "@/components/page/error-banner";
 import {
   SortableTh,
@@ -66,7 +68,6 @@ export default function BlocksPage() {
   // rolling window. Pulling from the bootstrap query (already cached) so
   // mounting this page doesn't trigger a separate fetch.
   const { data: bootstrap } = useExplorerBootstrap();
-  const tpsSeries = bootstrap?.stats.tps.points;
   const gasSeries = bootstrap?.stats.gasUtilization.points;
 
   const blocks = page?.data;
@@ -92,16 +93,52 @@ export default function BlocksPage() {
     let gasPctSum = 0;
     let txCount = 0;
     let emptyCount = 0;
+    let sizeSum = 0;
     for (const b of blocks) {
       gasPctSum += gasUsedPctNum(b.gas.used, b.gas.limit);
       txCount += b.transactionsCount;
       if (b.transactionsCount === 0) emptyCount++;
+      sizeSum += b.size || 0;
     }
     return {
       avgGasPct: gasPctSum / blocks.length,
       avgTxns: txCount / blocks.length,
       emptyPct: (emptyCount / blocks.length) * 100,
+      avgSize: sizeSum / blocks.length,
     };
+  }, [blocks]);
+
+  // Txns-per-block bar series for the dashboard bottom row. Bars are
+  // chronological (oldest left → newest right) so the chart reads like
+  // a tape of recent activity. The tallest bar is highlighted as peak.
+  const txnsBars = useMemo<Bar[]>(() => {
+    if (!blocks?.length) return [];
+    return [...blocks]
+      .reverse()
+      .map((b) => ({ label: `#${b.number}`, value: b.transactionsCount }));
+  }, [blocks]);
+
+  // Validator-distribution donut from the visible page sample. Honest
+  // window labelling — we don't pretend it's all-time. With a single
+  // validator in benchmark mode this collapses to one slice; on a real
+  // network it surfaces who's actually proposing.
+  const validatorSlices = useMemo<DonutSlice[]>(() => {
+    if (!blocks?.length) return [];
+    const counts = new Map<string, number>();
+    for (const b of blocks) {
+      const m = b.miner ?? "unknown";
+      // Render as a short hash-like label so the legend stays narrow.
+      const label = m === "unknown" ? "unknown" : `${m.slice(0, 6)}…${m.slice(-4)}`;
+      counts.set(label, (counts.get(label) ?? 0) + 1);
+    }
+    return Array.from(counts, ([label, value]) => ({ label, value }));
+  }, [blocks]);
+
+  // Block-size trend (chronological) — one number per block so the
+  // sparkline density matches gas/txns charts above.
+  const sizeSeries = useMemo<number[] | undefined>(() => {
+    if (!blocks?.length) return undefined;
+    return [...blocks].reverse().map((b) => b.size || 0);
   }, [blocks]);
 
   const view = useMemo(() => {
@@ -155,71 +192,140 @@ export default function BlocksPage() {
   return (
     <div className="px-4 sm:px-6 lg:px-10 py-6 sm:py-8 pb-12">
       <div className="eyebrow mb-2.5">Blocks</div>
-      <div className="flex items-baseline gap-3 mb-2">
-        <span className="h-display" style={{ fontSize: 56 }}>
-          Latest blocks
-        </span>
+
+      {/* Hero — chain-wide block count as the headline. Sub-line carries
+          supporting metrics derived from data we have (rolling avg block
+          time, computed BPS). No "vs prev 24h" delta — that needs
+          backend snapshot tracking firn doesn't expose today. */}
+      <div className="flex items-baseline flex-wrap gap-3 mb-2">
+        {stats ? (
+          <span className="h-display" style={{ fontSize: 64, lineHeight: 1 }}>
+            <AnimatedNumber value={stats.totalBlocks} />
+          </span>
+        ) : (
+          <Skeleton className="h-[64px] w-[280px]" />
+        )}
+        <span style={{ fontSize: 17, color: "var(--ink-3)" }}>blocks produced</span>
         <PauseButton feed="blocks" />
       </div>
-      <div className="mb-7" style={{ fontSize: 14, color: "var(--ink-3)" }}>
-        Live block stream from the indexer — filter the visible page or pause the stream while you
-        read.
-      </div>
-
-      {/* KPI strip — chain-wide on the left, page-scoped on the right.
-          The page-scoped cells respect the active filters so a validator
-          filter immediately reveals that operator's block-shape. */}
       <div
-        className="grid grid-cols-2 sm:grid-cols-4 mb-9"
-        style={{ borderTop: "1px solid var(--line)" }}
+        className="mono mb-9 flex flex-wrap items-baseline"
+        style={{ fontSize: 12.5, color: "var(--ink-3)", gap: "6px 18px" }}
       >
-        <KpiCell
-          first
-          label="Total blocks"
-          value={stats ? <AnimatedNumber value={stats.totalBlocks} /> : null}
-          sub={
-            stats?.averageBlockTimeMs
-              ? `${(stats.averageBlockTimeMs / 1000).toFixed(2)}s avg block time`
-              : ""
-          }
-        />
-        <KpiCell
-          divider
-          label="Live BPS"
-          value={bps != null ? bps.toFixed(2) : null}
-          sub="blocks per second"
-        />
-        <KpiCell
-          divider
-          label="Avg gas % (page)"
-          value={pageStats ? `${pageStats.avgGasPct.toFixed(1)}%` : null}
-          sub={pageStats ? `${pageStats.avgTxns.toFixed(1)} txns/block` : ""}
-        />
-        <KpiCell
-          label="Empty % (page)"
-          value={pageStats ? `${pageStats.emptyPct.toFixed(1)}%` : null}
-          sub={view ? `${formatNumber(view.length)} on this page` : ""}
-        />
+        {stats?.averageBlockTimeMs ? (
+          <span>
+            <span style={{ color: "var(--ink-2)" }}>
+              {(stats.averageBlockTimeMs / 1000).toFixed(2)}s
+            </span>{" "}
+            avg block time
+          </span>
+        ) : null}
+        {bps != null ? (
+          <span>
+            <span style={{ color: "var(--ink-2)" }}>{bps.toFixed(2)}</span> bps
+          </span>
+        ) : null}
+        {pageStats ? (
+          <span>
+            <span style={{ color: "var(--ink-2)" }}>{pageStats.emptyPct.toFixed(1)}%</span> empty
+            (page)
+          </span>
+        ) : null}
+        {pageStats ? (
+          <span>
+            <span style={{ color: "var(--ink-2)" }}>{pageStats.avgTxns.toFixed(1)}</span> txns/block
+            (page)
+          </span>
+        ) : null}
       </div>
 
-      {/* Chart strip — same primitive (Sparkline) and styling as the home
-          page so the visual language is consistent across surfaces. On
-          the blocks index, gas utilization is the headline (block-shape
-          signal); throughput rides alongside so the user can tell whether
-          a saturation spike is "many small txs" or "one fat tx". */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8 mb-8">
+      {/* Top dashboard row: main gas-utilization chart on the left (~2/3),
+          stack of small KPI cards on the right (~1/3, 2x2 grid). */}
+      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-6 mb-8">
         <ChartCard
-          title="Block gas utilization"
+          title="Block gas utilization · last 50 blocks"
           unit="%"
           series={gasSeries}
           yMax={100}
           color={
             gasSeries && gasSeries.length > 0
               ? gasUtilTone(gasSeries[gasSeries.length - 1])
-              : "var(--accent)"
+              : "var(--good)"
           }
         />
-        <ChartCard title="Throughput" unit="tx/s" series={tpsSeries} color="var(--good)" />
+        <div className="grid grid-cols-2 gap-6">
+          <MiniKpi
+            label="Avg gas % (page)"
+            value={pageStats ? `${pageStats.avgGasPct.toFixed(1)}%` : null}
+            sub={view ? `${formatNumber(view.length)} blocks` : ""}
+          />
+          <MiniKpi
+            label="Avg block size"
+            value={pageStats ? formatBlockSize(Math.round(pageStats.avgSize)) : null}
+            sub={view ? `${formatNumber(view.length)} blocks` : ""}
+          />
+          <MiniKpi
+            label="Avg txns / block"
+            value={pageStats ? pageStats.avgTxns.toFixed(1) : null}
+            sub={pageStats ? `${pageStats.emptyPct.toFixed(1)}% empty` : ""}
+          />
+          <MiniKpi
+            label="Live BPS"
+            value={bps != null ? bps.toFixed(2) : null}
+            sub="blocks per second"
+          />
+        </div>
+      </div>
+
+      {/* Bottom dashboard row: txns-per-block bars · validator donut ·
+          block-size trend. Each card carries an honest sample-window
+          label so it can't be misread as a chain-wide aggregate. */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-9">
+        <div className="card border border-line rounded-[10px] bg-bg-elev" style={{ padding: 18 }}>
+          <div className="eyebrow mb-3">Txns / block · last {blocks?.length ?? "—"}</div>
+          {txnsBars.length ? (
+            <BarChart
+              fluid
+              bars={txnsBars}
+              height={88}
+              tone="var(--ink-4)"
+              peakTone="var(--good)"
+              leftLabel={txnsBars[0]?.label}
+              rightLabel={txnsBars[txnsBars.length - 1]?.label}
+            />
+          ) : (
+            <Skeleton className="h-[88px] w-full" />
+          )}
+        </div>
+
+        <div className="card border border-line rounded-[10px] bg-bg-elev" style={{ padding: 18 }}>
+          <div className="eyebrow mb-3">Validator mix · last {blocks?.length ?? "—"} blocks</div>
+          {validatorSlices.length ? (
+            <Donut slices={validatorSlices} size={120} thickness={14} />
+          ) : (
+            <Skeleton className="h-[120px] w-full" />
+          )}
+        </div>
+
+        <div className="card border border-line rounded-[10px] bg-bg-elev" style={{ padding: 18 }}>
+          <div className="eyebrow mb-3">Block size · last {sizeSeries?.length ?? "—"} blocks</div>
+          {sizeSeries && sizeSeries.length >= 2 ? (
+            <Sparkline fluid height={88} data={sizeSeries} color="var(--ink-3)" />
+          ) : (
+            <Skeleton className="h-[88px] w-full" />
+          )}
+          <div
+            className="mono mt-1.5"
+            style={{ fontSize: 11, color: "var(--ink-4)", textAlign: "right" }}
+          >
+            Now ·{" "}
+            <span style={{ color: "var(--ink-2)" }}>
+              {sizeSeries && sizeSeries.length > 0
+                ? formatBlockSize(sizeSeries[sizeSeries.length - 1])
+                : "—"}
+            </span>
+          </div>
+        </div>
       </div>
 
       <FilterBar
@@ -448,4 +554,38 @@ function parseUintMaybe(s: string): number | undefined {
   const n = Number(t);
   if (!Number.isFinite(n) || n < 0 || !Number.isInteger(n)) return undefined;
   return n;
+}
+
+/**
+ * Compact KPI card for the right-hand 2x2 grid in the dashboard hero
+ * row. Mirrors /transactions/page.tsx's MiniKpi — kept duplicated
+ * rather than extracted because the two pages will likely diverge as
+ * each grows page-specific affordances; pre-extracting now would
+ * just be premature abstraction.
+ */
+function MiniKpi({
+  label,
+  value,
+  sub,
+}: {
+  label: string;
+  value: React.ReactNode;
+  sub?: React.ReactNode;
+}) {
+  return (
+    <div
+      className="card border border-line rounded-[10px] bg-bg-elev"
+      style={{ padding: "14px 16px" }}
+    >
+      <div className="eyebrow mb-2">{label}</div>
+      <div className="h-display" style={{ fontSize: 24, lineHeight: 1.1 }}>
+        {value ?? <Skeleton className="h-7 w-20" />}
+      </div>
+      {sub != null ? (
+        <div className="mono mt-1.5" style={{ fontSize: 11, color: "var(--ink-4)" }}>
+          {sub}
+        </div>
+      ) : null}
+    </div>
+  );
 }
