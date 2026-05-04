@@ -8,6 +8,17 @@
 
 Next.js app. Point it at a running firn instance and you're done.
 
+## Built to be forked
+
+This is a **reference UI**, not a closed product. Fork it, rebrand it, ship it as your L1's official explorer:
+
+- Swap `public/firn.png`, the colors in `app/globals.css` (OKLCH tokens), and the strings in `app/layout.tsx` for your branding.
+- Add new pages under `app/` against firn's typed [OpenAPI client](./lib/api/) — `pnpm orval` regenerates from `openapi.json` whenever the firn API changes.
+- Drop or rewrite any of the existing pages (`/blocks`, `/transactions`, `/address/[hash]`, `/tokens/[hash]`, `/genesis`, `/validators`) — none are load-bearing for the others.
+- Wire your own decoded surfaces (e.g. a DEX-specific dashboard) by extending firn with a [custom decoder](https://github.com/ava-labs/firn/blob/main/docs/PLUGINS.md), then consuming the new endpoint here.
+
+The explorer's job is to be a faithful renderer of firn's API. Everything cosmetic is yours to change.
+
 ## Run it
 
 ```bash
