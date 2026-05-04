@@ -3,12 +3,20 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useTransactions, useStats, useChain, useBlocks } from "@/lib/api/queries";
+import {
+  useTransactions,
+  useStats,
+  useChain,
+  useBlocks,
+  useStatsMethods,
+  type StatsBucket,
+  type StatsWindow,
+} from "@/lib/api/queries";
 import { useExplorerBootstrap } from "@/lib/api/explorer";
-import { ChartCard } from "@/components/page/chart-card";
 import { Sparkline } from "@/components/lattice/sparkline";
 import { Donut, type DonutSlice } from "@/components/lattice/donut";
 import { BarChart, type Bar } from "@/components/lattice/bar-chart";
+import { StackedArea } from "@/components/lattice/stacked-area";
 import { Hash } from "@/components/lattice/hash";
 import { Chip } from "@/components/lattice/chip";
 import { GenesisChip } from "@/components/lattice/genesis-chip";
@@ -51,6 +59,7 @@ export default function TransactionsPage() {
   const [method, setMethod] = useState("");
   const [status, setStatus] = useState<StatusFilter>("all");
   const [sort, setSort] = useState<SortState<SortKey> | null>(null);
+  const [methodWindow, setMethodWindow] = useState<StatsWindow>("24h");
 
   const addressParam = address.trim().toLowerCase() || undefined;
   const methodParam = method.trim().toLowerCase() || undefined;
@@ -74,6 +83,11 @@ export default function TransactionsPage() {
   // across the app) so this page mounting doesn't fan out a new fetch.
   const { data: bootstrap } = useExplorerBootstrap();
   const tpsSeries = bootstrap?.stats.tps.points;
+
+  // Throughput-by-method aggregate, REAL data from firn's /v1/stats/methods.
+  // Bucket choice scales with the window so 7d/30d give one point per day.
+  const methodBucket: StatsBucket = methodWindow === "7d" || methodWindow === "30d" ? "1d" : "1h";
+  const { data: methodSeries } = useStatsMethods(methodBucket, methodWindow);
   // Last 50 blocks for the per-hour gas-used bars. Sampling from the
   // most recent window — labelled honestly on the card as "last N
   // blocks" so it can't be misread as a 24h aggregate.
@@ -267,16 +281,41 @@ export default function TransactionsPage() {
         ) : null}
       </div>
 
-      {/* Top dashboard row: main throughput chart on the left (~2/3),
-          stack of small KPI cards on the right (~1/3, 2x2 grid). Lines
-          up with the mockup's hero composition. */}
+      {/* Top dashboard row: main throughput-by-method stacked area on the
+          left (~2/3), stack of small KPI cards on the right (~1/3, 2x2
+          grid). Real data from firn's /v1/stats/methods aggregate; the
+          time-range tabs swap window+bucket on the same query. */}
       <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-6 mb-8">
-        <ChartCard
-          title="Throughput · last 50 blocks"
-          unit="tx/s"
-          series={tpsSeries}
-          color="var(--good)"
-        />
+        <div className="card border border-line rounded-[10px] bg-bg-elev" style={{ padding: 18 }}>
+          <div className="flex items-baseline justify-between mb-3">
+            <div className="eyebrow">Throughput by method · {methodWindow.toUpperCase()}</div>
+            <div className="flex items-center gap-3 mono" style={{ fontSize: 11.5 }}>
+              {(["1h", "6h", "24h", "7d", "30d"] as const).map((w) => (
+                <button
+                  key={w}
+                  type="button"
+                  onClick={() => setMethodWindow(w)}
+                  style={{
+                    padding: "2px 6px",
+                    border: "none",
+                    background: "transparent",
+                    color: w === methodWindow ? "var(--ink)" : "var(--ink-4)",
+                    fontWeight: w === methodWindow ? 600 : 400,
+                    cursor: "pointer",
+                    borderRadius: 4,
+                  }}
+                >
+                  {w}
+                </button>
+              ))}
+            </div>
+          </div>
+          {methodSeries && methodSeries.length > 0 ? (
+            <StackedArea data={methodSeries} height={220} />
+          ) : (
+            <Skeleton className="h-[220px] w-full" />
+          )}
+        </div>
         <div className="grid grid-cols-2 gap-6">
           <MiniKpi
             label="Median gas price"
