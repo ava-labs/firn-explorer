@@ -745,14 +745,20 @@ function LiveBlocksList({
                 onClick={() => onClick(b.number)}
                 className={`grid items-center w-full text-left ${freshHashes.has(b.hash) ? "fresh-row" : ""}`}
                 style={{
+                  // Individual border sides instead of the `border` shorthand —
+                  // mixing shorthand and a non-shorthand `borderBottom` on the
+                  // same element triggers a React shorthand-collision warning,
+                  // and which one wins becomes order-dependent on re-render.
+                  borderTop: "none",
+                  borderRight: "none",
+                  borderLeft: "none",
+                  borderBottom: i < blocks.length - 1 ? "1px solid var(--line-soft)" : "none",
+                  borderRadius: 0,
                   gridTemplateColumns: "120px 1fr 80px",
                   padding: "14px 18px",
-                  borderBottom: i < blocks.length - 1 ? "1px solid var(--line-soft)" : 0,
                   background: isHead ? "var(--accent-soft)" : "transparent",
                   color: isHead ? "var(--accent-ink)" : "inherit",
                   cursor: "pointer",
-                  border: "none",
-                  borderRadius: 0,
                 }}
               >
                 <div>
