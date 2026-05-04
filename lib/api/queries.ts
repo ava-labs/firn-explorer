@@ -61,7 +61,7 @@ import {
   getListAddressLogsUrl,
 } from "./generated/firn";
 import { firnQueryKey } from "./generated-query-key";
-import { FirnApiError, pchainCall } from "./client";
+import { FirnApiError, getApiBase, pchainCall } from "./client";
 import { fetchSourcifyContract, type SourcifyContract } from "@/lib/sourcify";
 import { decodeFromAbi, fetchExternalSelector, type SelectorMatch } from "@/lib/selectors";
 import type {
@@ -416,6 +416,115 @@ export function useL1Uptime(opts?: QueryOpts<L1UptimeResponse>) {
     queryFn: ({ signal }) =>
       fetchValidatorUptime({ signal }) as unknown as Promise<L1UptimeResponse>,
     staleTime: 30 * 1000,
+    retry: 1,
+    ...opts,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Aggregate stats endpoints (firn /v1/stats/*) — hand-rolled until orval
+// regenerates against the latest openapi.json. The shapes mirror firn's
+// internal/types/types.go: TimeseriesPoint, MethodMixPoint,
+// ProducerEntry, ReorgsResponse.
+// ---------------------------------------------------------------------------
+
+export type StatsBucket = "1h" | "1d";
+export type StatsWindow = "1h" | "6h" | "24h" | "7d" | "30d";
+export type StatsTimeseriesMetric = "tps" | "gasPct" | "blockTime" | "fee";
+
+export interface MethodMixPoint {
+  ts: string;
+  by: Record<string, number>;
+}
+
+export interface TimeseriesPoint {
+  ts: string;
+  value: number;
+}
+
+export interface ProducerEntry {
+  miner: string;
+  blocks: number;
+  sharePct: number;
+}
+
+export interface ReorgsResponse {
+  count: number;
+  lastAt?: string;
+}
+
+/**
+ * Generic fetcher for the aggregate endpoints. Returns raw JSON and lets
+ * the caller cast — keeps this file leaner than per-endpoint helpers
+ * given the shapes are small and stable.
+ */
+async function fetchStatsAggregate<T>(path: string, signal?: AbortSignal): Promise<T> {
+  const url = `${getApiBase()}/v1${path}`;
+  const r = await fetch(url, { signal });
+  if (!r.ok) {
+    throw new Error(`firn ${path}: ${r.status} ${r.statusText}`);
+  }
+  return (await r.json()) as T;
+}
+
+export function useStatsMethods(
+  bucket: StatsBucket,
+  window: StatsWindow,
+  opts?: QueryOpts<MethodMixPoint[]>,
+) {
+  return useQuery({
+    queryKey: firnQueryKey({ bucket, window }, { url: "/v1/stats/methods" }),
+    queryFn: ({ signal }) =>
+      fetchStatsAggregate<MethodMixPoint[]>(
+        `/stats/methods?bucket=${bucket}&window=${window}`,
+        signal,
+      ),
+    staleTime: 30 * 1000,
+    refetchOnWindowFocus: false,
+    retry: 1,
+    ...opts,
+  });
+}
+
+export function useStatsTimeseries(
+  metric: StatsTimeseriesMetric,
+  bucket: StatsBucket,
+  window: StatsWindow,
+  opts?: QueryOpts<TimeseriesPoint[]>,
+) {
+  return useQuery({
+    queryKey: firnQueryKey({ metric, bucket, window }, { url: "/v1/stats/timeseries" }),
+    queryFn: ({ signal }) =>
+      fetchStatsAggregate<TimeseriesPoint[]>(
+        `/stats/timeseries?metric=${metric}&bucket=${bucket}&window=${window}`,
+        signal,
+      ),
+    staleTime: 30 * 1000,
+    refetchOnWindowFocus: false,
+    retry: 1,
+    ...opts,
+  });
+}
+
+export function useStatsProducers(window: StatsWindow, opts?: QueryOpts<ProducerEntry[]>) {
+  return useQuery({
+    queryKey: firnQueryKey({ window }, { url: "/v1/stats/producers" }),
+    queryFn: ({ signal }) =>
+      fetchStatsAggregate<ProducerEntry[]>(`/stats/producers?window=${window}`, signal),
+    staleTime: 30 * 1000,
+    refetchOnWindowFocus: false,
+    retry: 1,
+    ...opts,
+  });
+}
+
+export function useStatsReorgs(window: StatsWindow, opts?: QueryOpts<ReorgsResponse>) {
+  return useQuery({
+    queryKey: firnQueryKey({ window }, { url: "/v1/stats/reorgs" }),
+    queryFn: ({ signal }) =>
+      fetchStatsAggregate<ReorgsResponse>(`/stats/reorgs?window=${window}`, signal),
+    staleTime: 60 * 1000,
+    refetchOnWindowFocus: false,
     retry: 1,
     ...opts,
   });
