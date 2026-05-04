@@ -224,8 +224,18 @@ function mergeTickIntoBootstrap(
   tick: ExplorerFeedTick,
   paused: LivePauseState,
 ) {
-  void apiBase; // key carries apiBase via firnQueryKey
-  const key = firnQueryKey({}, { url: getGetExplorerBootstrapUrl() });
+  // Build the key directly from the closure-captured apiBase. The
+  // `firnQueryKey` mutator is convenient but reads `getApiBase()` at
+  // call time — and on a network switch, `setApiBase()` runs
+  // synchronously inside the click handler before React commits the
+  // new state and tears down the old EventSource. An in-flight tick
+  // from the OLD network can fire its handler in that gap, and if we
+  // ask `firnQueryKey` for the key it returns the NEW base, dumping
+  // testnet's payload into local's bootstrap cache. Symptom: live
+  // blocks panel shows the previous network's blocks for a beat
+  // after switching. Use the captured arg — it's the apiBase the
+  // SSE actually came from — to scope the write correctly.
+  const key = [apiBase, getGetExplorerBootstrapUrl()] as const;
   queryClient.setQueryData<ExplorerBootstrap>(key, (prev) => {
     if (!prev) return prev;
 
