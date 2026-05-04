@@ -4,18 +4,23 @@
  * firn
  * OpenAPI spec version: 0.1.0
  */
+import type { ListTeleporterMessagesKind } from './listTeleporterMessagesKind';
 
 export type ListTeleporterMessagesParams = {
 /**
  * "warp" | "teleporter" — empty matches both
  */
-kind?: string;
+kind?: ListTeleporterMessagesKind;
 /**
  * Filter to a single bytes32 message ID
+ * @maxLength 66
+ * @pattern ^(0x)?[0-9a-fA-F]{64}$
  */
 messageId?: string;
 /**
  * Filter by emitter contract
+ * @maxLength 42
+ * @pattern ^(0x)?[0-9a-fA-F]{40}$
  */
 address?: string;
 /**

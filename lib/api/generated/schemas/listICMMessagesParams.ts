@@ -4,18 +4,23 @@
  * firn
  * OpenAPI spec version: 0.1.0
  */
+import type { ListICMMessagesKind } from './listICMMessagesKind';
 
 export type ListICMMessagesParams = {
 /**
  * "warp" | "teleporter" — empty matches both
  */
-kind?: string;
+kind?: ListICMMessagesKind;
 /**
  * Filter to a single bytes32 message ID
+ * @maxLength 66
+ * @pattern ^(0x)?[0-9a-fA-F]{64}$
  */
 messageId?: string;
 /**
  * Filter by emitter contract
+ * @maxLength 42
+ * @pattern ^(0x)?[0-9a-fA-F]{40}$
  */
 address?: string;
 /**
