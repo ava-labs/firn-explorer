@@ -121,7 +121,7 @@ export default function ValidatorsPage() {
   const bootstrapping = isBootstrappingError(error);
   // Optional: subnet-evm /validators namespace may or may not be wired up.
   // Errors are non-fatal — we just render uptime as "—" per row.
-  const { data: l1Uptime } = useL1Uptime();
+  const { data: l1Uptime, error: l1UptimeError } = useL1Uptime();
   // Optional: avalanchego /ext/info via firn's /v1/peers. 503 when firn
   // wasn't pointed at an info-exposing node (public RPC providers don't
   // expose this). Hooks return undefined data on error and we degrade
@@ -345,7 +345,7 @@ export default function ValidatorsPage() {
           sub={
             totals.avgUptimeCount > 0
               ? `${totals.avgUptimeCount}/${totals.count} reporting`
-              : "needs /validators proxy"
+              : describeUptimeMiss(l1UptimeError)
           }
         />
         {/* "Peered" replaces the BLS-equipped tile when the operator
@@ -623,9 +623,7 @@ function ValidatorRow({
         ) : l1Loading ? (
           <span style={{ color: "var(--ink-4)" }}>…</span>
         ) : l1Error ? (
-          <span style={{ color: "var(--ink-4)" }} title={l1Error.message}>
-            err
-          </span>
+          <BalanceErrorPill error={l1Error} />
         ) : (
           (balanceDisplay ?? <span style={{ color: "var(--ink-4)" }}>—</span>)
         )}
@@ -669,6 +667,83 @@ function cmpBig(a: string | undefined, b: string | undefined): number {
   } catch {
     return 0;
   }
+}
+
+/**
+ * Renders the balance-cell error in a way that explains itself.
+ *
+ * The previous "err" rendering hid the underlying message in the
+ * tooltip and gave the user no actionable signal. Common causes are
+ * specific and worth distinguishing:
+ *
+ *   - 503 / "rpc_disabled"  → firn was started without -pchain-rpc;
+ *     show "no rpc" so operators reach for the right config.
+ *   - "method not found"    → the upstream P-Chain doesn't yet
+ *     expose platform.getL1Validator (older avalanchego). Show
+ *     "old node".
+ *   - "validationID not found" / similar → the configured P-Chain
+ *     is on a different network than the validator (running firn
+ *     against mainnet's P-Chain while looking at Fuji validators is
+ *     a frequent setup mistake). Show "wrong net".
+ *   - everything else → "rpc err" with the message in the tooltip
+ *     for diagnosis.
+ *
+ * Hover for full message in every case.
+ */
+/**
+ * Translate a /v1/validators/uptime error into a one-line operator
+ * hint shown under the Avg uptime tile. The previous fixed text
+ * ("needs /validators proxy") was misleading on chains where firn
+ * IS proxying /validators but the upstream returned an empty set —
+ * which happens on a fresh L1 with no uptime samples yet, on
+ * mainnet/testnet mismatches, or when the namespace isn't enabled
+ * on the L1's avalanchego.
+ */
+function describeUptimeMiss(err: Error | null | undefined): string {
+  if (!err) return "no samples yet";
+  const msg = (err.message ?? "").toLowerCase();
+  if (msg.includes("rpc_disabled") || msg.includes("503")) return "needs -validators-rpc";
+  if (msg.includes("method not found") || msg.includes("-32601")) return "namespace not enabled";
+  if (msg.includes("502") || msg.includes("upstream")) return "upstream unreachable";
+  return "uptime endpoint failed";
+}
+
+function BalanceErrorPill({ error }: { error: Error }) {
+  const msg = error.message ?? "";
+  const lower = msg.toLowerCase();
+  let label = "rpc err";
+  // Order matters — check more specific shapes first.
+  if (lower.includes("rpc_disabled") || lower.includes("503")) {
+    label = "no rpc";
+  } else if (lower.includes("method not found") || lower.includes("-32601")) {
+    label = "old node";
+  } else if (
+    // "couldn't get validator: not found" / "validationID … not found"
+    // — P-Chain saw the request, doesn't know this validationID. Most
+    //   commonly means we're aimed at a different network's P-Chain.
+    lower.includes("couldn't get validator") ||
+    (lower.includes("not found") && (lower.includes("validation") || lower.includes("validator")))
+  ) {
+    label = "wrong net";
+  } else if (
+    // BadGateway / network unreachable from firn → P-Chain.
+    lower.includes("502") ||
+    lower.includes("upstream") ||
+    lower.includes("connection refused") ||
+    lower.includes("dial tcp") ||
+    lower.includes("timeout")
+  ) {
+    label = "upstream";
+  } else if (lower.includes("bootstrapping")) {
+    label = "bootstrap";
+  } else if (lower.includes("invalid") && lower.includes("validation")) {
+    label = "bad id";
+  }
+  return (
+    <span style={{ color: "var(--ink-4)", fontSize: 11.5, fontStyle: "italic" }} title={msg}>
+      {label}
+    </span>
+  );
 }
 
 /**

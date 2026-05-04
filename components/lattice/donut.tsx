@@ -21,6 +21,13 @@ const OTHER_COLOR = "var(--ink-4)";
 export interface DonutSlice {
   label: string;
   value: number;
+  /** Per-slice color override. Use when callers want consistent
+   *  colors across multiple charts of the same data — e.g. the
+   *  transactions page pairs the donut with a stacked-area; passing
+   *  `categoryColor(label, i)` from `stacked-area` keeps "Native
+   *  transfer" the same slate-blue in both places. When unset, the
+   *  donut falls back to its own ordinal palette. */
+  color?: string;
 }
 
 export function Donut({
@@ -60,7 +67,7 @@ export function Donut({
   const tailTotal = tail.reduce((acc, s) => acc + s.value, 0);
   const display: Array<DonutSlice & { color: string }> = head.map((s, i) => ({
     ...s,
-    color: PALETTE[i % PALETTE.length],
+    color: s.color ?? PALETTE[i % PALETTE.length],
   }));
   if (tailTotal > 0) display.push({ label: "Other", value: tailTotal, color: OTHER_COLOR });
 

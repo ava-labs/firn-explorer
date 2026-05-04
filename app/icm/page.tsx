@@ -8,11 +8,11 @@ import {
   useICMRoutes,
   useICMStats,
   useICMTimeseries,
-  useICMTokens,
+  useICTTTokens,
   type ICMBucket,
   type ICMRoute,
   type ICMTimeseriesPoint,
-  type ICMTokenVolume,
+  type ICTTTokenVolume,
   type ICMWindow,
 } from "@/lib/api/queries";
 import { Hash } from "@/components/lattice/hash";
@@ -97,7 +97,7 @@ export default function ICMPage() {
     window: windowSel,
     bucket: BUCKET_FOR_WINDOW[windowSel],
   });
-  const { data: tokensData, isPending: tokensPending } = useICMTokens({
+  const { data: tokensData, isPending: tokensPending } = useICTTTokens({
     window: windowSel,
     limit: 8,
   });
@@ -933,7 +933,7 @@ function TokensSection({
   loading,
   windowSel,
 }: {
-  tokens: ICMTokenVolume[];
+  tokens: ICTTTokenVolume[];
   truncated: boolean;
   sampled?: number;
   loading: boolean;
@@ -996,7 +996,7 @@ function TokensSection({
   );
 }
 
-function TokenRow({ rank, token }: { rank: number; token: ICMTokenVolume }) {
+function TokenRow({ rank, token }: { rank: number; token: ICTTTokenVolume }) {
   const symbol = token.symbol || null;
   const name = token.name || null;
   const display = symbol ? `${symbol}${name && name !== symbol ? ` · ${name}` : ""}` : null;
