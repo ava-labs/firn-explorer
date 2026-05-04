@@ -1307,74 +1307,6 @@
         ],
         "type": "object"
       },
-      "ICMTokenVolume": {
-        "additionalProperties": false,
-        "properties": {
-          "address": {
-            "type": "string"
-          },
-          "decimals": {
-            "format": "int32",
-            "minimum": 0,
-            "type": "integer"
-          },
-          "messageCount": {
-            "format": "int64",
-            "minimum": 0,
-            "type": "integer"
-          },
-          "name": {
-            "type": "string"
-          },
-          "symbol": {
-            "type": "string"
-          },
-          "totalAmount": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "address",
-          "decimals",
-          "messageCount",
-          "totalAmount"
-        ],
-        "type": "object"
-      },
-      "ICMTokensResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "sampledMessages": {
-            "format": "int64",
-            "minimum": 0,
-            "type": "integer"
-          },
-          "tokens": {
-            "items": {
-              "$ref": "#/components/schemas/ICMTokenVolume"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "truncated": {
-            "type": "boolean"
-          },
-          "windowSeconds": {
-            "format": "int64",
-            "minimum": 0,
-            "type": "integer"
-          }
-        },
-        "required": [
-          "tokens",
-          "sampledMessages",
-          "truncated",
-          "windowSeconds"
-        ],
-        "type": "object"
-      },
       "InternalTransaction": {
         "additionalProperties": false,
         "properties": {
@@ -2469,6 +2401,74 @@
           "blockTime",
           "txHash",
           "logIndex"
+        ],
+        "type": "object"
+      },
+      "TokenVolume": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "decimals": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "messageCount": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "symbol": {
+            "type": "string"
+          },
+          "totalAmount": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "address",
+          "decimals",
+          "messageCount",
+          "totalAmount"
+        ],
+        "type": "object"
+      },
+      "TokensResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "sampledMessages": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "tokens": {
+            "items": {
+              "$ref": "#/components/schemas/TokenVolume"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "windowSeconds": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "tokens",
+          "sampledMessages",
+          "truncated",
+          "windowSeconds"
         ],
         "type": "object"
       },
@@ -4054,9 +4054,9 @@
         ]
       }
     },
-    "/v1/icm/tokens": {
+    "/v1/ictt/tokens": {
       "get": {
-        "operationId": "listICMTokens",
+        "operationId": "listICTTTokens",
         "parameters": [
           {
             "description": "Trailing window, default 24h",
@@ -4094,7 +4094,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ICMTokensResponse"
+                  "$ref": "#/components/schemas/TokensResponse"
                 }
               }
             },

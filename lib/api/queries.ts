@@ -31,7 +31,7 @@ import {
   getPeers as fetchPeers,
   listICMMessages as fetchICMMessages,
   listICMRoutes as fetchICMRoutes,
-  listICMTokens as fetchICMTokens,
+  listICTTTokens as fetchICTTTokens,
   getICMStats as fetchICMStats,
   getICMTimeseries as fetchICMTimeseries,
   listTeleporterMessages as fetchTeleporterMessages,
@@ -57,7 +57,7 @@ import {
   getListICMMessagesUrl,
   getGetPeersUrl,
   getListICMRoutesUrl,
-  getListICMTokensUrl,
+  getListICTTTokensUrl,
   getGetICMStatsUrl,
   getGetICMTimeseriesUrl,
   getListTeleporterMessagesUrl,
@@ -83,7 +83,7 @@ import type {
   ICMRoute as GenICMRoute,
   ICMStats as GenICMStats,
   ICMTimeseriesPoint as GenICMTimeseriesPoint,
-  ICMTokenVolume as GenICMTokenVolume,
+  TokenVolume as GenICTTTokenVolume,
   Peer as GenPeer,
   InternalTransaction as GenInternalTransaction,
   Message as GenMessage,
@@ -131,8 +131,8 @@ export type {
   ICMRoute,
   ICMStats,
   ICMTimeseriesPoint,
-  ICMTokenVolume,
-  ICMTokensResponse,
+  TokenVolume as ICTTTokenVolume,
+  TokensResponse as ICTTTokensResponse,
   Peer,
   PeersResponse,
   TokenRef,
@@ -885,31 +885,33 @@ export function useICMStats(params: { window?: ICMWindow } = {}, opts?: QueryOpt
   });
 }
 
-/** /v1/icm/tokens — top tokens by ICTT-transferred volume. The
+/** /v1/ictt/tokens — top tokens by ICTT-transferred volume. The
  *  `tokens` array is normalized to non-null. The endpoint may truncate
  *  to the most recent N events on long windows; `truncated` flags
- *  that case so the UI can label it honestly. */
-export interface ICMTokensView {
-  tokens: GenICMTokenVolume[];
+ *  that case so the UI can label it honestly. ICTT lives in a sibling
+ *  decoder to ICM (decoders/ictt) — same data plane, different
+ *  application protocol. */
+export interface ICTTTokensView {
+  tokens: GenICTTTokenVolume[];
   sampledMessages: number;
   truncated: boolean;
   windowSeconds: number;
 }
 
-export function useICMTokens(
+export function useICTTTokens(
   params: { window?: ICMWindow; limit?: number } = {},
-  opts?: QueryOpts<ICMTokensView>,
+  opts?: QueryOpts<ICTTTokensView>,
 ) {
   type RawBody = {
-    tokens: GenICMTokenVolume[] | null;
+    tokens: GenICTTTokenVolume[] | null;
     sampledMessages: number;
     truncated: boolean;
     windowSeconds: number;
   };
   return useQuery({
-    queryKey: firnQueryKey({ params }, { url: getListICMTokensUrl(params) }),
+    queryKey: firnQueryKey({ params }, { url: getListICTTTokensUrl(params) }),
     queryFn: ({ signal }) =>
-      (fetchICMTokens(params, { signal }) as unknown as Promise<RawBody>).then((r) => ({
+      (fetchICTTTokens(params, { signal }) as unknown as Promise<RawBody>).then((r) => ({
         tokens: r.tokens ?? [],
         sampledMessages: r.sampledMessages,
         truncated: r.truncated,

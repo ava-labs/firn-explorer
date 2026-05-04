@@ -355,7 +355,8 @@ export default function ValidatorDetailPage({ params }: { params: Promise<{ node
               </span>
             ) : (
               <span className="mono" style={{ fontSize: 12, color: "var(--ink-4)" }}>
-                no uptime reported · firn must run with -rpc to enable subnet-evm /validators proxy
+                no uptime reported · subnet-evm tracks per-L1 uptime locally and only reports a
+                value once it has accumulated samples; this can take time on a fresh chain.
               </span>
             )}
           </DetailRow>
@@ -389,7 +390,9 @@ export default function ValidatorDetailPage({ params }: { params: Promise<{ node
                   <span className="mono" style={{ fontSize: 13 }}>
                     {peer.observedUptime}%{" "}
                     <span style={{ color: "var(--ink-4)", fontSize: 11 }}>
-                      · our node&apos;s view of this peer&apos;s consensus responsiveness
+                      {parseFloat(peer.observedUptime) === 0
+                        ? "· no consensus polls answered yet — usually a freshly-connected peer or one we haven't polled in this subnet"
+                        : "· our node's view of this peer's consensus responsiveness"}
                     </span>
                   </span>
                 </DetailRow>

@@ -16,7 +16,7 @@ import { useExplorerBootstrap } from "@/lib/api/explorer";
 import { Sparkline } from "@/components/lattice/sparkline";
 import { Donut, type DonutSlice } from "@/components/lattice/donut";
 import { BarChart, type Bar } from "@/components/lattice/bar-chart";
-import { StackedArea } from "@/components/lattice/stacked-area";
+import { StackedArea, categoryColor } from "@/components/lattice/stacked-area";
 import { Hash } from "@/components/lattice/hash";
 import { Chip } from "@/components/lattice/chip";
 import { GenesisChip } from "@/components/lattice/genesis-chip";
@@ -144,6 +144,10 @@ export default function TransactionsPage() {
 
   // Method-mix donut: bin by `method.name` (or `selector` when name is
   // unresolved). Native transfers (no selector) get their own bucket.
+  // Colors come from `categoryColor` (the same palette the StackedArea
+  // above the donut uses) so "Native transfer" reads as the same
+  // slate-blue in both charts — the visual identity of a method
+  // shouldn't shift between adjacent panels.
   const methodSlices = useMemo<DonutSlice[]>(() => {
     if (!txs?.length) return [];
     const counts = new Map<string, number>();
@@ -152,7 +156,14 @@ export default function TransactionsPage() {
       const label = !sel || sel === "0x" ? "Native transfer" : (t.method.name ?? sel);
       counts.set(label, (counts.get(label) ?? 0) + 1);
     }
-    return Array.from(counts, ([label, value]) => ({ label, value }));
+    // Sort desc so the fallback-palette index matches the order the
+    // donut itself uses internally (it sorts before slicing). Without
+    // this, the i-th unrecognized label would get a different fallback
+    // hue in each chart.
+    const sorted = Array.from(counts, ([label, value]) => ({ label, value })).sort(
+      (a, b) => b.value - a.value,
+    );
+    return sorted.map((s, i) => ({ ...s, color: categoryColor(s.label, i) }));
   }, [txs]);
 
   // Recent fee trend: chronological (oldest first → newest last) so the
@@ -329,7 +340,12 @@ export default function TransactionsPage() {
           />
           <MiniKpi
             label="Avg fee / tx"
-            value={feeAvg ? formatTxFee(feeAvg.gasAvg, feeAvg.fee.toString(), symbol) : null}
+            // feeAvg.fee is the per-tx wei average — already
+            // gasUsed * gasPrice. formatTxFee multiplies its two args
+            // (gasUsed × wei-per-gas), so passing both produced a
+            // gas² value that read as ~15 ECH on a fuji benchmark.
+            // Pass gasUsed=1 so the multiply is identity.
+            value={feeAvg ? formatTxFee(1, feeAvg.fee.toString(), symbol) : null}
             sub={txs ? `last ${txs.length} txs` : ""}
           />
           <MiniKpi

@@ -51,14 +51,13 @@ import type {
   HealthOutputBody,
   ICMStats,
   ICMTimeseriesPoint,
-  ICMTokensResponse,
   ListAddressInternalTransactionsParams,
   ListAddressLogsParams,
   ListAddressTokenTransfersParams,
   ListBlocksParams,
   ListICMMessagesParams,
   ListICMRoutesParams,
-  ListICMTokensParams,
+  ListICTTTokensParams,
   ListTeleporterMessagesParams,
   ListTokenHoldersParams,
   ListTokenTransfersParams,
@@ -86,6 +85,7 @@ import type {
   StatsExtended,
   TimeseriesPoint,
   Token,
+  TokensResponse,
   Transaction
 } from './schemas';
 
@@ -3171,26 +3171,26 @@ export function useGetICMTimeseries<TData = Awaited<ReturnType<typeof getICMTime
 /**
  * @summary Top tokens transferred via ICTT over a trailing window
  */
-export type listICMTokensResponse200 = {
-  data: ICMTokensResponse
+export type listICTTTokensResponse200 = {
+  data: TokensResponse
   status: 200
 }
 
-export type listICMTokensResponseDefault = {
+export type listICTTTokensResponseDefault = {
   data: ErrorModel
   status: Exclude<HTTPStatusCodes, 200>
 }
 
-export type listICMTokensResponseSuccess = (listICMTokensResponse200) & {
+export type listICTTTokensResponseSuccess = (listICTTTokensResponse200) & {
   headers: Headers;
 };
-export type listICMTokensResponseError = (listICMTokensResponseDefault) & {
+export type listICTTTokensResponseError = (listICTTTokensResponseDefault) & {
   headers: Headers;
 };
 
-export type listICMTokensResponse = (listICMTokensResponseSuccess | listICMTokensResponseError)
+export type listICTTTokensResponse = (listICTTTokensResponseSuccess | listICTTTokensResponseError)
 
-export const getListICMTokensUrl = (params?: ListICMTokensParams,) => {
+export const getListICTTTokensUrl = (params?: ListICTTTokensParams,) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
@@ -3202,12 +3202,12 @@ export const getListICMTokensUrl = (params?: ListICMTokensParams,) => {
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `/v1/icm/tokens?${stringifiedParams}` : `/v1/icm/tokens`
+  return stringifiedParams.length > 0 ? `/v1/ictt/tokens?${stringifiedParams}` : `/v1/ictt/tokens`
 }
 
-export const listICMTokens = async (params?: ListICMTokensParams, options?: RequestInit): Promise<listICMTokensResponse> => {
+export const listICTTTokens = async (params?: ListICTTTokensParams, options?: RequestInit): Promise<listICTTTokensResponse> => {
 
-  return firnFetch<listICMTokensResponse>(getListICMTokensUrl(params),
+  return firnFetch<listICTTTokensResponse>(getListICTTTokensUrl(params),
   {
     ...options,
     method: 'GET'
@@ -3221,62 +3221,62 @@ export const listICMTokens = async (params?: ListICMTokensParams, options?: Requ
 
 
 
-export const useListICMTokensQueryOptions = <TData = Awaited<ReturnType<typeof listICMTokens>>, TError = ErrorModel>(params?: ListICMTokensParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listICMTokens>>, TError, TData>>, request?: SecondParameter<typeof firnFetch>}
+export const useListICTTTokensQueryOptions = <TData = Awaited<ReturnType<typeof listICTTTokens>>, TError = ErrorModel>(params?: ListICTTTokensParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listICTTTokens>>, TError, TData>>, request?: SecondParameter<typeof firnFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  firnQueryKey({ params }, { url: `/v1/icm/tokens`, queryOptions });
+  const queryKey =  firnQueryKey({ params }, { url: `/v1/ictt/tokens`, queryOptions });
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listICMTokens>>> = ({ signal }) => listICMTokens(params, { signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listICTTTokens>>> = ({ signal }) => listICTTTokens(params, { signal, ...requestOptions });
 
 
 
 
 
-   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listICMTokens>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listICTTTokens>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
 
-export type ListICMTokensQueryResult = NonNullable<Awaited<ReturnType<typeof listICMTokens>>>
-export type ListICMTokensQueryError = ErrorModel
+export type ListICTTTokensQueryResult = NonNullable<Awaited<ReturnType<typeof listICTTTokens>>>
+export type ListICTTTokensQueryError = ErrorModel
 
 
-export function useListICMTokens<TData = Awaited<ReturnType<typeof listICMTokens>>, TError = ErrorModel>(
- params: undefined |  ListICMTokensParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listICMTokens>>, TError, TData>> & Pick<
+export function useListICTTTokens<TData = Awaited<ReturnType<typeof listICTTTokens>>, TError = ErrorModel>(
+ params: undefined |  ListICTTTokensParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listICTTTokens>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof listICMTokens>>,
+          Awaited<ReturnType<typeof listICTTTokens>>,
           TError,
-          Awaited<ReturnType<typeof listICMTokens>>
+          Awaited<ReturnType<typeof listICTTTokens>>
         > , 'initialData'
       >, request?: SecondParameter<typeof firnFetch>}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListICMTokens<TData = Awaited<ReturnType<typeof listICMTokens>>, TError = ErrorModel>(
- params?: ListICMTokensParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listICMTokens>>, TError, TData>> & Pick<
+export function useListICTTTokens<TData = Awaited<ReturnType<typeof listICTTTokens>>, TError = ErrorModel>(
+ params?: ListICTTTokensParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listICTTTokens>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof listICMTokens>>,
+          Awaited<ReturnType<typeof listICTTTokens>>,
           TError,
-          Awaited<ReturnType<typeof listICMTokens>>
+          Awaited<ReturnType<typeof listICTTTokens>>
         > , 'initialData'
       >, request?: SecondParameter<typeof firnFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListICMTokens<TData = Awaited<ReturnType<typeof listICMTokens>>, TError = ErrorModel>(
- params?: ListICMTokensParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listICMTokens>>, TError, TData>>, request?: SecondParameter<typeof firnFetch>}
+export function useListICTTTokens<TData = Awaited<ReturnType<typeof listICTTTokens>>, TError = ErrorModel>(
+ params?: ListICTTTokensParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listICTTTokens>>, TError, TData>>, request?: SecondParameter<typeof firnFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
  * @summary Top tokens transferred via ICTT over a trailing window
  */
 
-export function useListICMTokens<TData = Awaited<ReturnType<typeof listICMTokens>>, TError = ErrorModel>(
- params?: ListICMTokensParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listICMTokens>>, TError, TData>>, request?: SecondParameter<typeof firnFetch>}
+export function useListICTTTokens<TData = Awaited<ReturnType<typeof listICTTTokens>>, TError = ErrorModel>(
+ params?: ListICTTTokensParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listICTTTokens>>, TError, TData>>, request?: SecondParameter<typeof firnFetch>}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
-  const queryOptions = useListICMTokensQueryOptions(params,options)
+  const queryOptions = useListICTTTokensQueryOptions(params,options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 
