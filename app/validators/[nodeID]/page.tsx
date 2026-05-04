@@ -7,8 +7,8 @@ import { Chip } from "@/components/lattice/chip";
 import { CopyButton } from "@/components/lattice/copy-button";
 import { Tabs } from "@/components/lattice/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useChain, useL1Uptime, useL1Validator, useValidators } from "@/lib/api/queries";
-import type { L1ValidatorDetails, RewardOwner, Validator } from "@/lib/api/queries";
+import { useChain, useL1Uptime, useL1Validator, usePeers, useValidators } from "@/lib/api/queries";
+import type { L1ValidatorDetails, Peer, RewardOwner, Validator } from "@/lib/api/queries";
 import { useNowTick } from "@/lib/use-fresh";
 import { formatNumber } from "@/lib/format";
 
@@ -24,6 +24,13 @@ export default function ValidatorDetailPage({ params }: { params: Promise<{ node
   const { data: vsResp, isPending, error } = useValidators();
   // Optional subnet-evm /validators uptime data (may be 503 if not wired).
   const { data: l1Uptime } = useL1Uptime();
+  // Optional avalanchego info.peers — surfaces IP / version / observed
+  // uptime for the validator when our local node is gossiping with it.
+  const { data: peersData } = usePeers();
+  const peer = useMemo<Peer | undefined>(
+    () => peersData?.peers.find((p) => p.nodeID === nodeID),
+    [peersData, nodeID],
+  );
   useNowTick(60_000);
 
   const [tab, setTab] = useState<TabId>("overview");
@@ -352,6 +359,69 @@ export default function ValidatorDetailPage({ params }: { params: Promise<{ node
               </span>
             )}
           </DetailRow>
+
+          {/* P2P facts from avalanchego info.peers — only present when
+              our node is currently gossiping with this validator. The
+              IP is the publicly-advertised P2P address (already public
+              by definition of P2P gossip), not a private one. */}
+          {peer ? (
+            <>
+              <DetailRow label="Public IP">
+                <span className="mono" style={{ fontSize: 13 }}>
+                  {peer.publicIP || peer.ip}
+                  {peer.ip && peer.publicIP && peer.ip !== peer.publicIP ? (
+                    <span style={{ color: "var(--ink-4)", fontSize: 11 }}>
+                      {" "}
+                      · seen on wire as {peer.ip}
+                    </span>
+                  ) : null}
+                </span>
+              </DetailRow>
+              {peer.version ? (
+                <DetailRow label="Node version">
+                  <span className="mono" style={{ fontSize: 13 }}>
+                    {peer.version}
+                  </span>
+                </DetailRow>
+              ) : null}
+              {peer.observedUptime ? (
+                <DetailRow label="Observed uptime">
+                  <span className="mono" style={{ fontSize: 13 }}>
+                    {peer.observedUptime}%{" "}
+                    <span style={{ color: "var(--ink-4)", fontSize: 11 }}>
+                      · our node&apos;s view of this peer&apos;s consensus responsiveness
+                    </span>
+                  </span>
+                </DetailRow>
+              ) : null}
+              {peer.lastReceived ? (
+                <DetailRow label="Last P2P message">
+                  <span className="mono" style={{ fontSize: 12.5 }}>
+                    in: {peer.lastReceived}
+                    {peer.lastSent ? ` · out: ${peer.lastSent}` : ""}
+                  </span>
+                </DetailRow>
+              ) : null}
+              {peer.benched && peer.benched.length > 0 ? (
+                <DetailRow label="Benched on">
+                  <span className="mono" style={{ fontSize: 12, color: "var(--warn)" }}>
+                    {peer.benched.length} subnet{peer.benched.length === 1 ? "" : "s"}
+                    <span style={{ color: "var(--ink-4)" }}>
+                      {" "}
+                      · peer stopped responding to consensus polls there
+                    </span>
+                  </span>
+                </DetailRow>
+              ) : null}
+            </>
+          ) : peersData ? (
+            <DetailRow label="Peer status">
+              <span className="mono" style={{ fontSize: 12, color: "var(--ink-4)" }}>
+                not in our local node&apos;s peer table · validator may be off, gossiping elsewhere,
+                or behind a NAT
+              </span>
+            </DetailRow>
+          ) : null}
 
           <DetailRow label="Started">
             <span className="mono" style={{ fontSize: 12.5 }}>

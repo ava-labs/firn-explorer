@@ -28,7 +28,12 @@ import {
   listAddressLogs as fetchAddressLogs,
   listAddressTokenTransfers as fetchAddressTokenTransfers,
   listBlocks as fetchBlocks,
+  getPeers as fetchPeers,
   listICMMessages as fetchICMMessages,
+  listICMRoutes as fetchICMRoutes,
+  listICMTokens as fetchICMTokens,
+  getICMStats as fetchICMStats,
+  getICMTimeseries as fetchICMTimeseries,
   listTeleporterMessages as fetchTeleporterMessages,
   listTokenHolders as fetchTokenHolders,
   listTokenTransfers as fetchTokenTransfers,
@@ -50,6 +55,11 @@ import {
   getGetProposerStateUrl,
   getGetValidatorUptimeUrl,
   getListICMMessagesUrl,
+  getGetPeersUrl,
+  getListICMRoutesUrl,
+  getListICMTokensUrl,
+  getGetICMStatsUrl,
+  getGetICMTimeseriesUrl,
   getListTeleporterMessagesUrl,
   getListTokensUrl,
   getGetTokenUrl,
@@ -70,9 +80,14 @@ import type {
   Block as GenBlock,
   Chain as GenChain,
   GenesisResponse as GenGenesisResponse,
+  ICMRoute as GenICMRoute,
+  ICMStats as GenICMStats,
+  ICMTimeseriesPoint as GenICMTimeseriesPoint,
+  ICMTokenVolume as GenICMTokenVolume,
+  Peer as GenPeer,
   InternalTransaction as GenInternalTransaction,
   Message as GenMessage,
-  Stats as GenStats,
+  StatsExtended as GenStats,
   Token as GenToken,
   TokenHolder as GenTokenHolder,
   TokenTransfer as GenTokenTransfer,
@@ -113,13 +128,21 @@ export type {
   GenesisUpgradesPrecompileUpgradesItem,
   GenesisUpgradesRaw,
   GenesisUpgradesStateUpgradesItem,
+  ICMRoute,
+  ICMStats,
+  ICMTimeseriesPoint,
+  ICMTokenVolume,
+  ICMTokensResponse,
+  Peer,
+  PeersResponse,
+  TokenRef,
   InternalTransaction,
-  L1Validator,
   Log,
   Message,
   Method,
   NativeToken,
-  Stats,
+  StatsExtended as Stats,
+  StatsExtended,
   TeleporterFeeInfoDecoded,
   TeleporterMessageDecoded,
   TeleporterMessageReceiptDecoded,
@@ -417,6 +440,38 @@ export function useL1Uptime(opts?: QueryOpts<L1UptimeResponse>) {
       fetchValidatorUptime({ signal }) as unknown as Promise<L1UptimeResponse>,
     staleTime: 30 * 1000,
     retry: 1,
+    ...opts,
+  });
+}
+
+/** /v1/peers — avalanchego info.peers proxied through firn. The peers
+ *  array is normalized to non-null. Returns 503 when firn was started
+ *  without -info-rpc; the consumer should treat that as "peer info
+ *  unavailable" and fall back to whatever P-Chain `connected` says. */
+export interface PeersView {
+  peers: GenPeer[];
+  numPeers: number;
+  ourSubnetId?: string;
+}
+
+export function usePeers(params: { subnetID?: string } = {}, opts?: QueryOpts<PeersView>) {
+  type RawBody = {
+    peers: GenPeer[] | null;
+    numPeers: number;
+    ourSubnetId?: string;
+  };
+  return useQuery({
+    queryKey: firnQueryKey({ params }, { url: getGetPeersUrl(params) }),
+    queryFn: ({ signal }) =>
+      (fetchPeers(params, { signal }) as unknown as Promise<RawBody>).then((r) => ({
+        peers: r.peers ?? [],
+        numPeers: r.numPeers,
+        ourSubnetId: r.ourSubnetId,
+      })),
+    staleTime: 30 * 1000,
+    // info.peers is best-effort — a 503 means firn isn't pointed at an
+    // /ext/info-exposing node. Don't retry on configured-disabled paths.
+    retry: (n, err) => (err instanceof FirnApiError && err.code === "rpc_disabled" ? false : n < 1),
     ...opts,
   });
 }
@@ -784,6 +839,98 @@ export function useTeleporterMessages(
       fetchTeleporterMessages(merged, { signal }).then((p) =>
         normalizePage<GenMessage>(p as unknown as RawPage<GenMessage>),
       ),
+    ...opts,
+  });
+}
+
+export type ICMWindow = "1h" | "6h" | "24h" | "7d" | "30d";
+export type ICMBucket = "5m" | "15m" | "1h" | "1d";
+
+/** /v1/icm/routes — top source→destination pairs over a trailing window.
+ *  The `routes` array is normalized to non-null. ActiveBlockchain* fields
+ *  identify the L1 firn is currently indexing — that side ships with a
+ *  blank `*BlockchainId` on each route entry. */
+export interface ICMRoutesResponse {
+  activeBlockchainCb58?: string;
+  activeBlockchainName?: string;
+  routes: GenICMRoute[];
+}
+
+export function useICMRoutes(
+  params: { window?: ICMWindow; limit?: number } = {},
+  opts?: QueryOpts<ICMRoutesResponse>,
+) {
+  type RoutesBody = {
+    activeBlockchainCb58?: string;
+    activeBlockchainName?: string;
+    routes: GenICMRoute[] | null;
+  };
+  return useQuery({
+    queryKey: firnQueryKey({ params }, { url: getListICMRoutesUrl(params) }),
+    queryFn: ({ signal }) =>
+      (fetchICMRoutes(params, { signal }) as unknown as Promise<RoutesBody>).then((r) => ({
+        activeBlockchainCb58: r.activeBlockchainCb58,
+        activeBlockchainName: r.activeBlockchainName,
+        routes: r.routes ?? [],
+      })),
+    ...opts,
+  });
+}
+
+export function useICMStats(params: { window?: ICMWindow } = {}, opts?: QueryOpts<GenICMStats>) {
+  return useQuery({
+    queryKey: firnQueryKey({ params }, { url: getGetICMStatsUrl(params) }),
+    queryFn: ({ signal }) => fetchICMStats(params, { signal }) as unknown as Promise<GenICMStats>,
+    ...opts,
+  });
+}
+
+/** /v1/icm/tokens — top tokens by ICTT-transferred volume. The
+ *  `tokens` array is normalized to non-null. The endpoint may truncate
+ *  to the most recent N events on long windows; `truncated` flags
+ *  that case so the UI can label it honestly. */
+export interface ICMTokensView {
+  tokens: GenICMTokenVolume[];
+  sampledMessages: number;
+  truncated: boolean;
+  windowSeconds: number;
+}
+
+export function useICMTokens(
+  params: { window?: ICMWindow; limit?: number } = {},
+  opts?: QueryOpts<ICMTokensView>,
+) {
+  type RawBody = {
+    tokens: GenICMTokenVolume[] | null;
+    sampledMessages: number;
+    truncated: boolean;
+    windowSeconds: number;
+  };
+  return useQuery({
+    queryKey: firnQueryKey({ params }, { url: getListICMTokensUrl(params) }),
+    queryFn: ({ signal }) =>
+      (fetchICMTokens(params, { signal }) as unknown as Promise<RawBody>).then((r) => ({
+        tokens: r.tokens ?? [],
+        sampledMessages: r.sampledMessages,
+        truncated: r.truncated,
+        windowSeconds: r.windowSeconds,
+      })),
+    ...opts,
+  });
+}
+
+export function useICMTimeseries(
+  params: { window?: ICMWindow; bucket?: ICMBucket } = {},
+  opts?: QueryOpts<GenICMTimeseriesPoint[]>,
+) {
+  return useQuery({
+    queryKey: firnQueryKey({ params }, { url: getGetICMTimeseriesUrl(params) }),
+    queryFn: ({ signal }) =>
+      (
+        fetchICMTimeseries(params, { signal }) as unknown as Promise<
+          GenICMTimeseriesPoint[] | null | undefined
+        >
+      ).then((p) => p ?? []),
     ...opts,
   });
 }

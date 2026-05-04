@@ -37,45 +37,54 @@ import type {
   GetChainPrecompilesParams,
   GetChainRulesParams,
   GetExplorerBootstrapParams,
+  GetICMStatsParams,
+  GetICMTimeseriesParams,
   GetNativeBalanceAtParams,
   GetNativeBalanceHistoryParams,
-  GetPChainBlockParams,
-  GetPChainTxParams,
-  GetPChainValidatorParams,
+  GetPeersParams,
+  GetStatsMethodsParams,
+  GetStatsProducersParams,
+  GetStatsReorgsParams,
+  GetStatsTimeseriesParams,
   GetTransactionParams,
   GetValidatorsParams,
   HealthOutputBody,
-  L1Validator,
+  ICMStats,
+  ICMTimeseriesPoint,
+  ICMTokensResponse,
   ListAddressInternalTransactionsParams,
   ListAddressLogsParams,
   ListAddressTokenTransfersParams,
   ListBlocksParams,
   ListICMMessagesParams,
-  ListPChainBlocksParams,
-  ListPChainValidatorsParams,
+  ListICMRoutesParams,
+  ListICMTokensParams,
   ListTeleporterMessagesParams,
   ListTokenHoldersParams,
   ListTokenTransfersParams,
   ListTokensParams,
   ListTransactionsParams,
-  PChainBlock,
-  PChainTx,
+  MethodMixPoint,
   PageAddressLog,
   PageBalancePoint,
   PageBlock,
   PageInternalTransaction,
-  PageL1Validator,
   PageMessage,
-  PagePChainBlock,
   PageToken,
   PageTokenHolder,
   PageTokenTransfer,
   PageTransaction,
+  PeersResponse,
+  ProducerEntry,
+  ReadyzBody,
+  ReorgsResponse,
+  RoutesOutputBody,
   ScreenAddressParams,
   ScreenPOSTInputBody,
   ScreenPOSTOutputBody,
   ScreenResult,
-  Stats,
+  StatsExtended,
+  TimeseriesPoint,
   Token,
   Transaction
 } from './schemas';
@@ -288,6 +297,120 @@ export function useHealthz<TData = Awaited<ReturnType<typeof healthz>>, TError =
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = useHealthzQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+/**
+ * @summary Readiness probe (ingestion lag, store health, feature flags)
+ */
+export type readyzResponse200 = {
+  data: ReadyzBody
+  status: 200
+}
+
+export type readyzResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type readyzResponseSuccess = (readyzResponse200) & {
+  headers: Headers;
+};
+export type readyzResponseError = (readyzResponseDefault) & {
+  headers: Headers;
+};
+
+export type readyzResponse = (readyzResponseSuccess | readyzResponseError)
+
+export const getReadyzUrl = () => {
+
+
+
+
+  return `/readyz`
+}
+
+export const readyz = async ( options?: RequestInit): Promise<readyzResponse> => {
+
+  return firnFetch<readyzResponse>(getReadyzUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+
+export const useReadyzQueryOptions = <TData = Awaited<ReturnType<typeof readyz>>, TError = ErrorModel>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof readyz>>, TError, TData>>, request?: SecondParameter<typeof firnFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  firnQueryKey({  }, { url: `/readyz`, queryOptions });
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof readyz>>> = ({ signal }) => readyz({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof readyz>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ReadyzQueryResult = NonNullable<Awaited<ReturnType<typeof readyz>>>
+export type ReadyzQueryError = ErrorModel
+
+
+export function useReadyz<TData = Awaited<ReturnType<typeof readyz>>, TError = ErrorModel>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof readyz>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof readyz>>,
+          TError,
+          Awaited<ReturnType<typeof readyz>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof firnFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useReadyz<TData = Awaited<ReturnType<typeof readyz>>, TError = ErrorModel>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof readyz>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof readyz>>,
+          TError,
+          Awaited<ReturnType<typeof readyz>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof firnFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useReadyz<TData = Awaited<ReturnType<typeof readyz>>, TError = ErrorModel>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof readyz>>, TError, TData>>, request?: SecondParameter<typeof firnFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Readiness probe (ingestion lag, store health, feature flags)
+ */
+
+export function useReadyz<TData = Awaited<ReturnType<typeof readyz>>, TError = ErrorModel>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof readyz>>, TError, TData>>, request?: SecondParameter<typeof firnFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = useReadyzQueryOptions(options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 
@@ -2683,28 +2806,28 @@ export function useListICMMessages<TData = Awaited<ReturnType<typeof listICMMess
 
 
 /**
- * @summary Paginated P-Chain block list
+ * @summary Top source→destination ICM routes over a trailing window
  */
-export type listPChainBlocksResponse200 = {
-  data: PagePChainBlock
+export type listICMRoutesResponse200 = {
+  data: RoutesOutputBody
   status: 200
 }
 
-export type listPChainBlocksResponseDefault = {
+export type listICMRoutesResponseDefault = {
   data: ErrorModel
   status: Exclude<HTTPStatusCodes, 200>
 }
 
-export type listPChainBlocksResponseSuccess = (listPChainBlocksResponse200) & {
+export type listICMRoutesResponseSuccess = (listICMRoutesResponse200) & {
   headers: Headers;
 };
-export type listPChainBlocksResponseError = (listPChainBlocksResponseDefault) & {
+export type listICMRoutesResponseError = (listICMRoutesResponseDefault) & {
   headers: Headers;
 };
 
-export type listPChainBlocksResponse = (listPChainBlocksResponseSuccess | listPChainBlocksResponseError)
+export type listICMRoutesResponse = (listICMRoutesResponseSuccess | listICMRoutesResponseError)
 
-export const getListPChainBlocksUrl = (params?: ListPChainBlocksParams,) => {
+export const getListICMRoutesUrl = (params?: ListICMRoutesParams,) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
@@ -2716,12 +2839,12 @@ export const getListPChainBlocksUrl = (params?: ListPChainBlocksParams,) => {
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `/v1/pchain/blocks?${stringifiedParams}` : `/v1/pchain/blocks`
+  return stringifiedParams.length > 0 ? `/v1/icm/routes?${stringifiedParams}` : `/v1/icm/routes`
 }
 
-export const listPChainBlocks = async (params?: ListPChainBlocksParams, options?: RequestInit): Promise<listPChainBlocksResponse> => {
+export const listICMRoutes = async (params?: ListICMRoutesParams, options?: RequestInit): Promise<listICMRoutesResponse> => {
 
-  return firnFetch<listPChainBlocksResponse>(getListPChainBlocksUrl(params),
+  return firnFetch<listICMRoutesResponse>(getListICMRoutesUrl(params),
   {
     ...options,
     method: 'GET'
@@ -2735,62 +2858,62 @@ export const listPChainBlocks = async (params?: ListPChainBlocksParams, options?
 
 
 
-export const useListPChainBlocksQueryOptions = <TData = Awaited<ReturnType<typeof listPChainBlocks>>, TError = ErrorModel>(params?: ListPChainBlocksParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listPChainBlocks>>, TError, TData>>, request?: SecondParameter<typeof firnFetch>}
+export const useListICMRoutesQueryOptions = <TData = Awaited<ReturnType<typeof listICMRoutes>>, TError = ErrorModel>(params?: ListICMRoutesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listICMRoutes>>, TError, TData>>, request?: SecondParameter<typeof firnFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  firnQueryKey({ params }, { url: `/v1/pchain/blocks`, queryOptions });
+  const queryKey =  firnQueryKey({ params }, { url: `/v1/icm/routes`, queryOptions });
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listPChainBlocks>>> = ({ signal }) => listPChainBlocks(params, { signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listICMRoutes>>> = ({ signal }) => listICMRoutes(params, { signal, ...requestOptions });
 
 
 
 
 
-   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listPChainBlocks>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listICMRoutes>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
 
-export type ListPChainBlocksQueryResult = NonNullable<Awaited<ReturnType<typeof listPChainBlocks>>>
-export type ListPChainBlocksQueryError = ErrorModel
+export type ListICMRoutesQueryResult = NonNullable<Awaited<ReturnType<typeof listICMRoutes>>>
+export type ListICMRoutesQueryError = ErrorModel
 
 
-export function useListPChainBlocks<TData = Awaited<ReturnType<typeof listPChainBlocks>>, TError = ErrorModel>(
- params: undefined |  ListPChainBlocksParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listPChainBlocks>>, TError, TData>> & Pick<
+export function useListICMRoutes<TData = Awaited<ReturnType<typeof listICMRoutes>>, TError = ErrorModel>(
+ params: undefined |  ListICMRoutesParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listICMRoutes>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof listPChainBlocks>>,
+          Awaited<ReturnType<typeof listICMRoutes>>,
           TError,
-          Awaited<ReturnType<typeof listPChainBlocks>>
+          Awaited<ReturnType<typeof listICMRoutes>>
         > , 'initialData'
       >, request?: SecondParameter<typeof firnFetch>}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListPChainBlocks<TData = Awaited<ReturnType<typeof listPChainBlocks>>, TError = ErrorModel>(
- params?: ListPChainBlocksParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listPChainBlocks>>, TError, TData>> & Pick<
+export function useListICMRoutes<TData = Awaited<ReturnType<typeof listICMRoutes>>, TError = ErrorModel>(
+ params?: ListICMRoutesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listICMRoutes>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof listPChainBlocks>>,
+          Awaited<ReturnType<typeof listICMRoutes>>,
           TError,
-          Awaited<ReturnType<typeof listPChainBlocks>>
+          Awaited<ReturnType<typeof listICMRoutes>>
         > , 'initialData'
       >, request?: SecondParameter<typeof firnFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListPChainBlocks<TData = Awaited<ReturnType<typeof listPChainBlocks>>, TError = ErrorModel>(
- params?: ListPChainBlocksParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listPChainBlocks>>, TError, TData>>, request?: SecondParameter<typeof firnFetch>}
+export function useListICMRoutes<TData = Awaited<ReturnType<typeof listICMRoutes>>, TError = ErrorModel>(
+ params?: ListICMRoutesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listICMRoutes>>, TError, TData>>, request?: SecondParameter<typeof firnFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
- * @summary Paginated P-Chain block list
+ * @summary Top source→destination ICM routes over a trailing window
  */
 
-export function useListPChainBlocks<TData = Awaited<ReturnType<typeof listPChainBlocks>>, TError = ErrorModel>(
- params?: ListPChainBlocksParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listPChainBlocks>>, TError, TData>>, request?: SecondParameter<typeof firnFetch>}
+export function useListICMRoutes<TData = Awaited<ReturnType<typeof listICMRoutes>>, TError = ErrorModel>(
+ params?: ListICMRoutesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listICMRoutes>>, TError, TData>>, request?: SecondParameter<typeof firnFetch>}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
-  const queryOptions = useListPChainBlocksQueryOptions(params,options)
+  const queryOptions = useListICMRoutesQueryOptions(params,options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 
@@ -2804,29 +2927,28 @@ export function useListPChainBlocks<TData = Awaited<ReturnType<typeof listPChain
 
 
 /**
- * @summary P-Chain block by height
+ * @summary Windowed ICM activity rollup (counts, layer split, distincts)
  */
-export type getPChainBlockResponse200 = {
-  data: PChainBlock
+export type getICMStatsResponse200 = {
+  data: ICMStats
   status: 200
 }
 
-export type getPChainBlockResponseDefault = {
+export type getICMStatsResponseDefault = {
   data: ErrorModel
   status: Exclude<HTTPStatusCodes, 200>
 }
 
-export type getPChainBlockResponseSuccess = (getPChainBlockResponse200) & {
+export type getICMStatsResponseSuccess = (getICMStatsResponse200) & {
   headers: Headers;
 };
-export type getPChainBlockResponseError = (getPChainBlockResponseDefault) & {
+export type getICMStatsResponseError = (getICMStatsResponseDefault) & {
   headers: Headers;
 };
 
-export type getPChainBlockResponse = (getPChainBlockResponseSuccess | getPChainBlockResponseError)
+export type getICMStatsResponse = (getICMStatsResponseSuccess | getICMStatsResponseError)
 
-export const getGetPChainBlockUrl = (height: string,
-    params?: GetPChainBlockParams,) => {
+export const getGetICMStatsUrl = (params?: GetICMStatsParams,) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
@@ -2838,13 +2960,12 @@ export const getGetPChainBlockUrl = (height: string,
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `/v1/pchain/blocks/${height}?${stringifiedParams}` : `/v1/pchain/blocks/${height}`
+  return stringifiedParams.length > 0 ? `/v1/icm/stats?${stringifiedParams}` : `/v1/icm/stats`
 }
 
-export const getPChainBlock = async (height: string,
-    params?: GetPChainBlockParams, options?: RequestInit): Promise<getPChainBlockResponse> => {
+export const getICMStats = async (params?: GetICMStatsParams, options?: RequestInit): Promise<getICMStatsResponse> => {
 
-  return firnFetch<getPChainBlockResponse>(getGetPChainBlockUrl(height,params),
+  return firnFetch<getICMStatsResponse>(getGetICMStatsUrl(params),
   {
     ...options,
     method: 'GET'
@@ -2858,67 +2979,62 @@ export const getPChainBlock = async (height: string,
 
 
 
-export const useGetPChainBlockQueryOptions = <TData = Awaited<ReturnType<typeof getPChainBlock>>, TError = ErrorModel>(height: string,
-    params?: GetPChainBlockParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPChainBlock>>, TError, TData>>, request?: SecondParameter<typeof firnFetch>}
+export const useGetICMStatsQueryOptions = <TData = Awaited<ReturnType<typeof getICMStats>>, TError = ErrorModel>(params?: GetICMStatsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getICMStats>>, TError, TData>>, request?: SecondParameter<typeof firnFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  firnQueryKey({ height,params }, { url: `/v1/pchain/blocks/${height}`, queryOptions });
+  const queryKey =  firnQueryKey({ params }, { url: `/v1/icm/stats`, queryOptions });
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPChainBlock>>> = ({ signal }) => getPChainBlock(height,params, { signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getICMStats>>> = ({ signal }) => getICMStats(params, { signal, ...requestOptions });
 
 
 
 
 
-   return  { queryKey, queryFn, enabled: !!(height), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPChainBlock>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getICMStats>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
 
-export type GetPChainBlockQueryResult = NonNullable<Awaited<ReturnType<typeof getPChainBlock>>>
-export type GetPChainBlockQueryError = ErrorModel
+export type GetICMStatsQueryResult = NonNullable<Awaited<ReturnType<typeof getICMStats>>>
+export type GetICMStatsQueryError = ErrorModel
 
 
-export function useGetPChainBlock<TData = Awaited<ReturnType<typeof getPChainBlock>>, TError = ErrorModel>(
- height: string,
-    params: undefined |  GetPChainBlockParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPChainBlock>>, TError, TData>> & Pick<
+export function useGetICMStats<TData = Awaited<ReturnType<typeof getICMStats>>, TError = ErrorModel>(
+ params: undefined |  GetICMStatsParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getICMStats>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof getPChainBlock>>,
+          Awaited<ReturnType<typeof getICMStats>>,
           TError,
-          Awaited<ReturnType<typeof getPChainBlock>>
+          Awaited<ReturnType<typeof getICMStats>>
         > , 'initialData'
       >, request?: SecondParameter<typeof firnFetch>}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetPChainBlock<TData = Awaited<ReturnType<typeof getPChainBlock>>, TError = ErrorModel>(
- height: string,
-    params?: GetPChainBlockParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPChainBlock>>, TError, TData>> & Pick<
+export function useGetICMStats<TData = Awaited<ReturnType<typeof getICMStats>>, TError = ErrorModel>(
+ params?: GetICMStatsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getICMStats>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof getPChainBlock>>,
+          Awaited<ReturnType<typeof getICMStats>>,
           TError,
-          Awaited<ReturnType<typeof getPChainBlock>>
+          Awaited<ReturnType<typeof getICMStats>>
         > , 'initialData'
       >, request?: SecondParameter<typeof firnFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetPChainBlock<TData = Awaited<ReturnType<typeof getPChainBlock>>, TError = ErrorModel>(
- height: string,
-    params?: GetPChainBlockParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPChainBlock>>, TError, TData>>, request?: SecondParameter<typeof firnFetch>}
+export function useGetICMStats<TData = Awaited<ReturnType<typeof getICMStats>>, TError = ErrorModel>(
+ params?: GetICMStatsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getICMStats>>, TError, TData>>, request?: SecondParameter<typeof firnFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
- * @summary P-Chain block by height
+ * @summary Windowed ICM activity rollup (counts, layer split, distincts)
  */
 
-export function useGetPChainBlock<TData = Awaited<ReturnType<typeof getPChainBlock>>, TError = ErrorModel>(
- height: string,
-    params?: GetPChainBlockParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPChainBlock>>, TError, TData>>, request?: SecondParameter<typeof firnFetch>}
+export function useGetICMStats<TData = Awaited<ReturnType<typeof getICMStats>>, TError = ErrorModel>(
+ params?: GetICMStatsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getICMStats>>, TError, TData>>, request?: SecondParameter<typeof firnFetch>}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
-  const queryOptions = useGetPChainBlockQueryOptions(height,params,options)
+  const queryOptions = useGetICMStatsQueryOptions(params,options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 
@@ -2932,29 +3048,28 @@ export function useGetPChainBlock<TData = Awaited<ReturnType<typeof getPChainBlo
 
 
 /**
- * @summary P-Chain transaction by tx ID
+ * @summary ICM activity time series (events per bucket, layer split)
  */
-export type getPChainTxResponse200 = {
-  data: PChainTx
+export type getICMTimeseriesResponse200 = {
+  data: ICMTimeseriesPoint[] | null
   status: 200
 }
 
-export type getPChainTxResponseDefault = {
+export type getICMTimeseriesResponseDefault = {
   data: ErrorModel
   status: Exclude<HTTPStatusCodes, 200>
 }
 
-export type getPChainTxResponseSuccess = (getPChainTxResponse200) & {
+export type getICMTimeseriesResponseSuccess = (getICMTimeseriesResponse200) & {
   headers: Headers;
 };
-export type getPChainTxResponseError = (getPChainTxResponseDefault) & {
+export type getICMTimeseriesResponseError = (getICMTimeseriesResponseDefault) & {
   headers: Headers;
 };
 
-export type getPChainTxResponse = (getPChainTxResponseSuccess | getPChainTxResponseError)
+export type getICMTimeseriesResponse = (getICMTimeseriesResponseSuccess | getICMTimeseriesResponseError)
 
-export const getGetPChainTxUrl = (txId: string,
-    params?: GetPChainTxParams,) => {
+export const getGetICMTimeseriesUrl = (params?: GetICMTimeseriesParams,) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
@@ -2966,13 +3081,12 @@ export const getGetPChainTxUrl = (txId: string,
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `/v1/pchain/txs/${txId}?${stringifiedParams}` : `/v1/pchain/txs/${txId}`
+  return stringifiedParams.length > 0 ? `/v1/icm/timeseries?${stringifiedParams}` : `/v1/icm/timeseries`
 }
 
-export const getPChainTx = async (txId: string,
-    params?: GetPChainTxParams, options?: RequestInit): Promise<getPChainTxResponse> => {
+export const getICMTimeseries = async (params?: GetICMTimeseriesParams, options?: RequestInit): Promise<getICMTimeseriesResponse> => {
 
-  return firnFetch<getPChainTxResponse>(getGetPChainTxUrl(txId,params),
+  return firnFetch<getICMTimeseriesResponse>(getGetICMTimeseriesUrl(params),
   {
     ...options,
     method: 'GET'
@@ -2986,67 +3100,62 @@ export const getPChainTx = async (txId: string,
 
 
 
-export const useGetPChainTxQueryOptions = <TData = Awaited<ReturnType<typeof getPChainTx>>, TError = ErrorModel>(txId: string,
-    params?: GetPChainTxParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPChainTx>>, TError, TData>>, request?: SecondParameter<typeof firnFetch>}
+export const useGetICMTimeseriesQueryOptions = <TData = Awaited<ReturnType<typeof getICMTimeseries>>, TError = ErrorModel>(params?: GetICMTimeseriesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getICMTimeseries>>, TError, TData>>, request?: SecondParameter<typeof firnFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  firnQueryKey({ txId,params }, { url: `/v1/pchain/txs/${txId}`, queryOptions });
+  const queryKey =  firnQueryKey({ params }, { url: `/v1/icm/timeseries`, queryOptions });
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPChainTx>>> = ({ signal }) => getPChainTx(txId,params, { signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getICMTimeseries>>> = ({ signal }) => getICMTimeseries(params, { signal, ...requestOptions });
 
 
 
 
 
-   return  { queryKey, queryFn, enabled: !!(txId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPChainTx>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getICMTimeseries>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
 
-export type GetPChainTxQueryResult = NonNullable<Awaited<ReturnType<typeof getPChainTx>>>
-export type GetPChainTxQueryError = ErrorModel
+export type GetICMTimeseriesQueryResult = NonNullable<Awaited<ReturnType<typeof getICMTimeseries>>>
+export type GetICMTimeseriesQueryError = ErrorModel
 
 
-export function useGetPChainTx<TData = Awaited<ReturnType<typeof getPChainTx>>, TError = ErrorModel>(
- txId: string,
-    params: undefined |  GetPChainTxParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPChainTx>>, TError, TData>> & Pick<
+export function useGetICMTimeseries<TData = Awaited<ReturnType<typeof getICMTimeseries>>, TError = ErrorModel>(
+ params: undefined |  GetICMTimeseriesParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getICMTimeseries>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof getPChainTx>>,
+          Awaited<ReturnType<typeof getICMTimeseries>>,
           TError,
-          Awaited<ReturnType<typeof getPChainTx>>
+          Awaited<ReturnType<typeof getICMTimeseries>>
         > , 'initialData'
       >, request?: SecondParameter<typeof firnFetch>}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetPChainTx<TData = Awaited<ReturnType<typeof getPChainTx>>, TError = ErrorModel>(
- txId: string,
-    params?: GetPChainTxParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPChainTx>>, TError, TData>> & Pick<
+export function useGetICMTimeseries<TData = Awaited<ReturnType<typeof getICMTimeseries>>, TError = ErrorModel>(
+ params?: GetICMTimeseriesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getICMTimeseries>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof getPChainTx>>,
+          Awaited<ReturnType<typeof getICMTimeseries>>,
           TError,
-          Awaited<ReturnType<typeof getPChainTx>>
+          Awaited<ReturnType<typeof getICMTimeseries>>
         > , 'initialData'
       >, request?: SecondParameter<typeof firnFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetPChainTx<TData = Awaited<ReturnType<typeof getPChainTx>>, TError = ErrorModel>(
- txId: string,
-    params?: GetPChainTxParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPChainTx>>, TError, TData>>, request?: SecondParameter<typeof firnFetch>}
+export function useGetICMTimeseries<TData = Awaited<ReturnType<typeof getICMTimeseries>>, TError = ErrorModel>(
+ params?: GetICMTimeseriesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getICMTimeseries>>, TError, TData>>, request?: SecondParameter<typeof firnFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
- * @summary P-Chain transaction by tx ID
+ * @summary ICM activity time series (events per bucket, layer split)
  */
 
-export function useGetPChainTx<TData = Awaited<ReturnType<typeof getPChainTx>>, TError = ErrorModel>(
- txId: string,
-    params?: GetPChainTxParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPChainTx>>, TError, TData>>, request?: SecondParameter<typeof firnFetch>}
+export function useGetICMTimeseries<TData = Awaited<ReturnType<typeof getICMTimeseries>>, TError = ErrorModel>(
+ params?: GetICMTimeseriesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getICMTimeseries>>, TError, TData>>, request?: SecondParameter<typeof firnFetch>}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
-  const queryOptions = useGetPChainTxQueryOptions(txId,params,options)
+  const queryOptions = useGetICMTimeseriesQueryOptions(params,options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 
@@ -3060,28 +3169,28 @@ export function useGetPChainTx<TData = Awaited<ReturnType<typeof getPChainTx>>, 
 
 
 /**
- * @summary L1 validator set view as cached from P-Chain
+ * @summary Top tokens transferred via ICTT over a trailing window
  */
-export type listPChainValidatorsResponse200 = {
-  data: PageL1Validator
+export type listICMTokensResponse200 = {
+  data: ICMTokensResponse
   status: 200
 }
 
-export type listPChainValidatorsResponseDefault = {
+export type listICMTokensResponseDefault = {
   data: ErrorModel
   status: Exclude<HTTPStatusCodes, 200>
 }
 
-export type listPChainValidatorsResponseSuccess = (listPChainValidatorsResponse200) & {
+export type listICMTokensResponseSuccess = (listICMTokensResponse200) & {
   headers: Headers;
 };
-export type listPChainValidatorsResponseError = (listPChainValidatorsResponseDefault) & {
+export type listICMTokensResponseError = (listICMTokensResponseDefault) & {
   headers: Headers;
 };
 
-export type listPChainValidatorsResponse = (listPChainValidatorsResponseSuccess | listPChainValidatorsResponseError)
+export type listICMTokensResponse = (listICMTokensResponseSuccess | listICMTokensResponseError)
 
-export const getListPChainValidatorsUrl = (params?: ListPChainValidatorsParams,) => {
+export const getListICMTokensUrl = (params?: ListICMTokensParams,) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
@@ -3093,12 +3202,12 @@ export const getListPChainValidatorsUrl = (params?: ListPChainValidatorsParams,)
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `/v1/pchain/validators?${stringifiedParams}` : `/v1/pchain/validators`
+  return stringifiedParams.length > 0 ? `/v1/icm/tokens?${stringifiedParams}` : `/v1/icm/tokens`
 }
 
-export const listPChainValidators = async (params?: ListPChainValidatorsParams, options?: RequestInit): Promise<listPChainValidatorsResponse> => {
+export const listICMTokens = async (params?: ListICMTokensParams, options?: RequestInit): Promise<listICMTokensResponse> => {
 
-  return firnFetch<listPChainValidatorsResponse>(getListPChainValidatorsUrl(params),
+  return firnFetch<listICMTokensResponse>(getListICMTokensUrl(params),
   {
     ...options,
     method: 'GET'
@@ -3112,62 +3221,62 @@ export const listPChainValidators = async (params?: ListPChainValidatorsParams, 
 
 
 
-export const useListPChainValidatorsQueryOptions = <TData = Awaited<ReturnType<typeof listPChainValidators>>, TError = ErrorModel>(params?: ListPChainValidatorsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listPChainValidators>>, TError, TData>>, request?: SecondParameter<typeof firnFetch>}
+export const useListICMTokensQueryOptions = <TData = Awaited<ReturnType<typeof listICMTokens>>, TError = ErrorModel>(params?: ListICMTokensParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listICMTokens>>, TError, TData>>, request?: SecondParameter<typeof firnFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  firnQueryKey({ params }, { url: `/v1/pchain/validators`, queryOptions });
+  const queryKey =  firnQueryKey({ params }, { url: `/v1/icm/tokens`, queryOptions });
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listPChainValidators>>> = ({ signal }) => listPChainValidators(params, { signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listICMTokens>>> = ({ signal }) => listICMTokens(params, { signal, ...requestOptions });
 
 
 
 
 
-   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listPChainValidators>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listICMTokens>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
 
-export type ListPChainValidatorsQueryResult = NonNullable<Awaited<ReturnType<typeof listPChainValidators>>>
-export type ListPChainValidatorsQueryError = ErrorModel
+export type ListICMTokensQueryResult = NonNullable<Awaited<ReturnType<typeof listICMTokens>>>
+export type ListICMTokensQueryError = ErrorModel
 
 
-export function useListPChainValidators<TData = Awaited<ReturnType<typeof listPChainValidators>>, TError = ErrorModel>(
- params: undefined |  ListPChainValidatorsParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listPChainValidators>>, TError, TData>> & Pick<
+export function useListICMTokens<TData = Awaited<ReturnType<typeof listICMTokens>>, TError = ErrorModel>(
+ params: undefined |  ListICMTokensParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listICMTokens>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof listPChainValidators>>,
+          Awaited<ReturnType<typeof listICMTokens>>,
           TError,
-          Awaited<ReturnType<typeof listPChainValidators>>
+          Awaited<ReturnType<typeof listICMTokens>>
         > , 'initialData'
       >, request?: SecondParameter<typeof firnFetch>}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListPChainValidators<TData = Awaited<ReturnType<typeof listPChainValidators>>, TError = ErrorModel>(
- params?: ListPChainValidatorsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listPChainValidators>>, TError, TData>> & Pick<
+export function useListICMTokens<TData = Awaited<ReturnType<typeof listICMTokens>>, TError = ErrorModel>(
+ params?: ListICMTokensParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listICMTokens>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof listPChainValidators>>,
+          Awaited<ReturnType<typeof listICMTokens>>,
           TError,
-          Awaited<ReturnType<typeof listPChainValidators>>
+          Awaited<ReturnType<typeof listICMTokens>>
         > , 'initialData'
       >, request?: SecondParameter<typeof firnFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListPChainValidators<TData = Awaited<ReturnType<typeof listPChainValidators>>, TError = ErrorModel>(
- params?: ListPChainValidatorsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listPChainValidators>>, TError, TData>>, request?: SecondParameter<typeof firnFetch>}
+export function useListICMTokens<TData = Awaited<ReturnType<typeof listICMTokens>>, TError = ErrorModel>(
+ params?: ListICMTokensParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listICMTokens>>, TError, TData>>, request?: SecondParameter<typeof firnFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
- * @summary L1 validator set view as cached from P-Chain
+ * @summary Top tokens transferred via ICTT over a trailing window
  */
 
-export function useListPChainValidators<TData = Awaited<ReturnType<typeof listPChainValidators>>, TError = ErrorModel>(
- params?: ListPChainValidatorsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listPChainValidators>>, TError, TData>>, request?: SecondParameter<typeof firnFetch>}
+export function useListICMTokens<TData = Awaited<ReturnType<typeof listICMTokens>>, TError = ErrorModel>(
+ params?: ListICMTokensParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listICMTokens>>, TError, TData>>, request?: SecondParameter<typeof firnFetch>}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
-  const queryOptions = useListPChainValidatorsQueryOptions(params,options)
+  const queryOptions = useListICMTokensQueryOptions(params,options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 
@@ -3181,29 +3290,28 @@ export function useListPChainValidators<TData = Awaited<ReturnType<typeof listPC
 
 
 /**
- * @summary Single L1 validator by validationId
+ * @summary P2P peer table from avalanchego's info.peers, optionally scoped to a subnet
  */
-export type getPChainValidatorResponse200 = {
-  data: L1Validator
+export type getPeersResponse200 = {
+  data: PeersResponse
   status: 200
 }
 
-export type getPChainValidatorResponseDefault = {
+export type getPeersResponseDefault = {
   data: ErrorModel
   status: Exclude<HTTPStatusCodes, 200>
 }
 
-export type getPChainValidatorResponseSuccess = (getPChainValidatorResponse200) & {
+export type getPeersResponseSuccess = (getPeersResponse200) & {
   headers: Headers;
 };
-export type getPChainValidatorResponseError = (getPChainValidatorResponseDefault) & {
+export type getPeersResponseError = (getPeersResponseDefault) & {
   headers: Headers;
 };
 
-export type getPChainValidatorResponse = (getPChainValidatorResponseSuccess | getPChainValidatorResponseError)
+export type getPeersResponse = (getPeersResponseSuccess | getPeersResponseError)
 
-export const getGetPChainValidatorUrl = (validationId: string,
-    params?: GetPChainValidatorParams,) => {
+export const getGetPeersUrl = (params?: GetPeersParams,) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
@@ -3215,13 +3323,12 @@ export const getGetPChainValidatorUrl = (validationId: string,
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `/v1/pchain/validators/${validationId}?${stringifiedParams}` : `/v1/pchain/validators/${validationId}`
+  return stringifiedParams.length > 0 ? `/v1/peers?${stringifiedParams}` : `/v1/peers`
 }
 
-export const getPChainValidator = async (validationId: string,
-    params?: GetPChainValidatorParams, options?: RequestInit): Promise<getPChainValidatorResponse> => {
+export const getPeers = async (params?: GetPeersParams, options?: RequestInit): Promise<getPeersResponse> => {
 
-  return firnFetch<getPChainValidatorResponse>(getGetPChainValidatorUrl(validationId,params),
+  return firnFetch<getPeersResponse>(getGetPeersUrl(params),
   {
     ...options,
     method: 'GET'
@@ -3235,67 +3342,62 @@ export const getPChainValidator = async (validationId: string,
 
 
 
-export const useGetPChainValidatorQueryOptions = <TData = Awaited<ReturnType<typeof getPChainValidator>>, TError = ErrorModel>(validationId: string,
-    params?: GetPChainValidatorParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPChainValidator>>, TError, TData>>, request?: SecondParameter<typeof firnFetch>}
+export const useGetPeersQueryOptions = <TData = Awaited<ReturnType<typeof getPeers>>, TError = ErrorModel>(params?: GetPeersParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPeers>>, TError, TData>>, request?: SecondParameter<typeof firnFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  firnQueryKey({ validationId,params }, { url: `/v1/pchain/validators/${validationId}`, queryOptions });
+  const queryKey =  firnQueryKey({ params }, { url: `/v1/peers`, queryOptions });
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPChainValidator>>> = ({ signal }) => getPChainValidator(validationId,params, { signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPeers>>> = ({ signal }) => getPeers(params, { signal, ...requestOptions });
 
 
 
 
 
-   return  { queryKey, queryFn, enabled: !!(validationId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPChainValidator>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPeers>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
 
-export type GetPChainValidatorQueryResult = NonNullable<Awaited<ReturnType<typeof getPChainValidator>>>
-export type GetPChainValidatorQueryError = ErrorModel
+export type GetPeersQueryResult = NonNullable<Awaited<ReturnType<typeof getPeers>>>
+export type GetPeersQueryError = ErrorModel
 
 
-export function useGetPChainValidator<TData = Awaited<ReturnType<typeof getPChainValidator>>, TError = ErrorModel>(
- validationId: string,
-    params: undefined |  GetPChainValidatorParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPChainValidator>>, TError, TData>> & Pick<
+export function useGetPeers<TData = Awaited<ReturnType<typeof getPeers>>, TError = ErrorModel>(
+ params: undefined |  GetPeersParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPeers>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof getPChainValidator>>,
+          Awaited<ReturnType<typeof getPeers>>,
           TError,
-          Awaited<ReturnType<typeof getPChainValidator>>
+          Awaited<ReturnType<typeof getPeers>>
         > , 'initialData'
       >, request?: SecondParameter<typeof firnFetch>}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetPChainValidator<TData = Awaited<ReturnType<typeof getPChainValidator>>, TError = ErrorModel>(
- validationId: string,
-    params?: GetPChainValidatorParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPChainValidator>>, TError, TData>> & Pick<
+export function useGetPeers<TData = Awaited<ReturnType<typeof getPeers>>, TError = ErrorModel>(
+ params?: GetPeersParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPeers>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof getPChainValidator>>,
+          Awaited<ReturnType<typeof getPeers>>,
           TError,
-          Awaited<ReturnType<typeof getPChainValidator>>
+          Awaited<ReturnType<typeof getPeers>>
         > , 'initialData'
       >, request?: SecondParameter<typeof firnFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetPChainValidator<TData = Awaited<ReturnType<typeof getPChainValidator>>, TError = ErrorModel>(
- validationId: string,
-    params?: GetPChainValidatorParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPChainValidator>>, TError, TData>>, request?: SecondParameter<typeof firnFetch>}
+export function useGetPeers<TData = Awaited<ReturnType<typeof getPeers>>, TError = ErrorModel>(
+ params?: GetPeersParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPeers>>, TError, TData>>, request?: SecondParameter<typeof firnFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
- * @summary Single L1 validator by validationId
+ * @summary P2P peer table from avalanchego's info.peers, optionally scoped to a subnet
  */
 
-export function useGetPChainValidator<TData = Awaited<ReturnType<typeof getPChainValidator>>, TError = ErrorModel>(
- validationId: string,
-    params?: GetPChainValidatorParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPChainValidator>>, TError, TData>>, request?: SecondParameter<typeof firnFetch>}
+export function useGetPeers<TData = Awaited<ReturnType<typeof getPeers>>, TError = ErrorModel>(
+ params?: GetPeersParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPeers>>, TError, TData>>, request?: SecondParameter<typeof firnFetch>}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
-  const queryOptions = useGetPChainValidatorQueryOptions(validationId,params,options)
+  const queryOptions = useGetPeersQueryOptions(params,options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 
@@ -3310,7 +3412,7 @@ export function useGetPChainValidator<TData = Awaited<ReturnType<typeof getPChai
 
 /**
  * Opaque JSON-RPC passthrough. The request body and response body match the upstream namespace verbatim — firn does not validate either side.
- * @summary C-Chain (subnet-evm) JSON-RPC passthrough
+ * @summary L1 (subnet-evm) JSON-RPC passthrough
  */
 export type postRPCResponse200 = {
   data: unknown
@@ -3386,7 +3488,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type PostRPCMutationError = ErrorModel
 
     /**
- * @summary C-Chain (subnet-evm) JSON-RPC passthrough
+ * @summary L1 (subnet-evm) JSON-RPC passthrough
  */
 export const usePostRPC = <TError = ErrorModel,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postRPC>>, TError,{data: unknown}, TContext>, request?: SecondParameter<typeof firnFetch>}
@@ -3880,7 +3982,7 @@ export function useSignatureAggregatorHealth<TData = Awaited<ReturnType<typeof s
  * @summary Aggregate chain counters
  */
 export type getStatsResponse200 = {
-  data: Stats
+  data: StatsExtended
   status: 200
 }
 
@@ -3978,6 +4080,490 @@ export function useGetStats<TData = Awaited<ReturnType<typeof getStats>>, TError
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = useGetStatsQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+/**
+ * @summary Method-mix time series
+ */
+export type getStatsMethodsResponse200 = {
+  data: MethodMixPoint[] | null
+  status: 200
+}
+
+export type getStatsMethodsResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type getStatsMethodsResponseSuccess = (getStatsMethodsResponse200) & {
+  headers: Headers;
+};
+export type getStatsMethodsResponseError = (getStatsMethodsResponseDefault) & {
+  headers: Headers;
+};
+
+export type getStatsMethodsResponse = (getStatsMethodsResponseSuccess | getStatsMethodsResponseError)
+
+export const getGetStatsMethodsUrl = (params?: GetStatsMethodsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/v1/stats/methods?${stringifiedParams}` : `/v1/stats/methods`
+}
+
+export const getStatsMethods = async (params?: GetStatsMethodsParams, options?: RequestInit): Promise<getStatsMethodsResponse> => {
+
+  return firnFetch<getStatsMethodsResponse>(getGetStatsMethodsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+
+export const useGetStatsMethodsQueryOptions = <TData = Awaited<ReturnType<typeof getStatsMethods>>, TError = ErrorModel>(params?: GetStatsMethodsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getStatsMethods>>, TError, TData>>, request?: SecondParameter<typeof firnFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  firnQueryKey({ params }, { url: `/v1/stats/methods`, queryOptions });
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getStatsMethods>>> = ({ signal }) => getStatsMethods(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getStatsMethods>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetStatsMethodsQueryResult = NonNullable<Awaited<ReturnType<typeof getStatsMethods>>>
+export type GetStatsMethodsQueryError = ErrorModel
+
+
+export function useGetStatsMethods<TData = Awaited<ReturnType<typeof getStatsMethods>>, TError = ErrorModel>(
+ params: undefined |  GetStatsMethodsParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getStatsMethods>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getStatsMethods>>,
+          TError,
+          Awaited<ReturnType<typeof getStatsMethods>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof firnFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetStatsMethods<TData = Awaited<ReturnType<typeof getStatsMethods>>, TError = ErrorModel>(
+ params?: GetStatsMethodsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getStatsMethods>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getStatsMethods>>,
+          TError,
+          Awaited<ReturnType<typeof getStatsMethods>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof firnFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetStatsMethods<TData = Awaited<ReturnType<typeof getStatsMethods>>, TError = ErrorModel>(
+ params?: GetStatsMethodsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getStatsMethods>>, TError, TData>>, request?: SecondParameter<typeof firnFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Method-mix time series
+ */
+
+export function useGetStatsMethods<TData = Awaited<ReturnType<typeof getStatsMethods>>, TError = ErrorModel>(
+ params?: GetStatsMethodsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getStatsMethods>>, TError, TData>>, request?: SecondParameter<typeof firnFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = useGetStatsMethodsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+/**
+ * @summary Block producer ranking by share over a window
+ */
+export type getStatsProducersResponse200 = {
+  data: ProducerEntry[] | null
+  status: 200
+}
+
+export type getStatsProducersResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type getStatsProducersResponseSuccess = (getStatsProducersResponse200) & {
+  headers: Headers;
+};
+export type getStatsProducersResponseError = (getStatsProducersResponseDefault) & {
+  headers: Headers;
+};
+
+export type getStatsProducersResponse = (getStatsProducersResponseSuccess | getStatsProducersResponseError)
+
+export const getGetStatsProducersUrl = (params?: GetStatsProducersParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/v1/stats/producers?${stringifiedParams}` : `/v1/stats/producers`
+}
+
+export const getStatsProducers = async (params?: GetStatsProducersParams, options?: RequestInit): Promise<getStatsProducersResponse> => {
+
+  return firnFetch<getStatsProducersResponse>(getGetStatsProducersUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+
+export const useGetStatsProducersQueryOptions = <TData = Awaited<ReturnType<typeof getStatsProducers>>, TError = ErrorModel>(params?: GetStatsProducersParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getStatsProducers>>, TError, TData>>, request?: SecondParameter<typeof firnFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  firnQueryKey({ params }, { url: `/v1/stats/producers`, queryOptions });
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getStatsProducers>>> = ({ signal }) => getStatsProducers(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getStatsProducers>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetStatsProducersQueryResult = NonNullable<Awaited<ReturnType<typeof getStatsProducers>>>
+export type GetStatsProducersQueryError = ErrorModel
+
+
+export function useGetStatsProducers<TData = Awaited<ReturnType<typeof getStatsProducers>>, TError = ErrorModel>(
+ params: undefined |  GetStatsProducersParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getStatsProducers>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getStatsProducers>>,
+          TError,
+          Awaited<ReturnType<typeof getStatsProducers>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof firnFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetStatsProducers<TData = Awaited<ReturnType<typeof getStatsProducers>>, TError = ErrorModel>(
+ params?: GetStatsProducersParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getStatsProducers>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getStatsProducers>>,
+          TError,
+          Awaited<ReturnType<typeof getStatsProducers>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof firnFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetStatsProducers<TData = Awaited<ReturnType<typeof getStatsProducers>>, TError = ErrorModel>(
+ params?: GetStatsProducersParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getStatsProducers>>, TError, TData>>, request?: SecondParameter<typeof firnFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Block producer ranking by share over a window
+ */
+
+export function useGetStatsProducers<TData = Awaited<ReturnType<typeof getStatsProducers>>, TError = ErrorModel>(
+ params?: GetStatsProducersParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getStatsProducers>>, TError, TData>>, request?: SecondParameter<typeof firnFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = useGetStatsProducersQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+/**
+ * @summary Recent reorg count + most-recent timestamp
+ */
+export type getStatsReorgsResponse200 = {
+  data: ReorgsResponse
+  status: 200
+}
+
+export type getStatsReorgsResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type getStatsReorgsResponseSuccess = (getStatsReorgsResponse200) & {
+  headers: Headers;
+};
+export type getStatsReorgsResponseError = (getStatsReorgsResponseDefault) & {
+  headers: Headers;
+};
+
+export type getStatsReorgsResponse = (getStatsReorgsResponseSuccess | getStatsReorgsResponseError)
+
+export const getGetStatsReorgsUrl = (params?: GetStatsReorgsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/v1/stats/reorgs?${stringifiedParams}` : `/v1/stats/reorgs`
+}
+
+export const getStatsReorgs = async (params?: GetStatsReorgsParams, options?: RequestInit): Promise<getStatsReorgsResponse> => {
+
+  return firnFetch<getStatsReorgsResponse>(getGetStatsReorgsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+
+export const useGetStatsReorgsQueryOptions = <TData = Awaited<ReturnType<typeof getStatsReorgs>>, TError = ErrorModel>(params?: GetStatsReorgsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getStatsReorgs>>, TError, TData>>, request?: SecondParameter<typeof firnFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  firnQueryKey({ params }, { url: `/v1/stats/reorgs`, queryOptions });
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getStatsReorgs>>> = ({ signal }) => getStatsReorgs(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getStatsReorgs>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetStatsReorgsQueryResult = NonNullable<Awaited<ReturnType<typeof getStatsReorgs>>>
+export type GetStatsReorgsQueryError = ErrorModel
+
+
+export function useGetStatsReorgs<TData = Awaited<ReturnType<typeof getStatsReorgs>>, TError = ErrorModel>(
+ params: undefined |  GetStatsReorgsParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getStatsReorgs>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getStatsReorgs>>,
+          TError,
+          Awaited<ReturnType<typeof getStatsReorgs>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof firnFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetStatsReorgs<TData = Awaited<ReturnType<typeof getStatsReorgs>>, TError = ErrorModel>(
+ params?: GetStatsReorgsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getStatsReorgs>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getStatsReorgs>>,
+          TError,
+          Awaited<ReturnType<typeof getStatsReorgs>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof firnFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetStatsReorgs<TData = Awaited<ReturnType<typeof getStatsReorgs>>, TError = ErrorModel>(
+ params?: GetStatsReorgsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getStatsReorgs>>, TError, TData>>, request?: SecondParameter<typeof firnFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Recent reorg count + most-recent timestamp
+ */
+
+export function useGetStatsReorgs<TData = Awaited<ReturnType<typeof getStatsReorgs>>, TError = ErrorModel>(
+ params?: GetStatsReorgsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getStatsReorgs>>, TError, TData>>, request?: SecondParameter<typeof firnFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = useGetStatsReorgsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+/**
+ * @summary Time-bucketed metric series (tps/gasPct/blockTime/fee)
+ */
+export type getStatsTimeseriesResponse200 = {
+  data: TimeseriesPoint[] | null
+  status: 200
+}
+
+export type getStatsTimeseriesResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type getStatsTimeseriesResponseSuccess = (getStatsTimeseriesResponse200) & {
+  headers: Headers;
+};
+export type getStatsTimeseriesResponseError = (getStatsTimeseriesResponseDefault) & {
+  headers: Headers;
+};
+
+export type getStatsTimeseriesResponse = (getStatsTimeseriesResponseSuccess | getStatsTimeseriesResponseError)
+
+export const getGetStatsTimeseriesUrl = (params?: GetStatsTimeseriesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/v1/stats/timeseries?${stringifiedParams}` : `/v1/stats/timeseries`
+}
+
+export const getStatsTimeseries = async (params?: GetStatsTimeseriesParams, options?: RequestInit): Promise<getStatsTimeseriesResponse> => {
+
+  return firnFetch<getStatsTimeseriesResponse>(getGetStatsTimeseriesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+
+export const useGetStatsTimeseriesQueryOptions = <TData = Awaited<ReturnType<typeof getStatsTimeseries>>, TError = ErrorModel>(params?: GetStatsTimeseriesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getStatsTimeseries>>, TError, TData>>, request?: SecondParameter<typeof firnFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  firnQueryKey({ params }, { url: `/v1/stats/timeseries`, queryOptions });
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getStatsTimeseries>>> = ({ signal }) => getStatsTimeseries(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getStatsTimeseries>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetStatsTimeseriesQueryResult = NonNullable<Awaited<ReturnType<typeof getStatsTimeseries>>>
+export type GetStatsTimeseriesQueryError = ErrorModel
+
+
+export function useGetStatsTimeseries<TData = Awaited<ReturnType<typeof getStatsTimeseries>>, TError = ErrorModel>(
+ params: undefined |  GetStatsTimeseriesParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getStatsTimeseries>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getStatsTimeseries>>,
+          TError,
+          Awaited<ReturnType<typeof getStatsTimeseries>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof firnFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetStatsTimeseries<TData = Awaited<ReturnType<typeof getStatsTimeseries>>, TError = ErrorModel>(
+ params?: GetStatsTimeseriesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getStatsTimeseries>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getStatsTimeseries>>,
+          TError,
+          Awaited<ReturnType<typeof getStatsTimeseries>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof firnFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetStatsTimeseries<TData = Awaited<ReturnType<typeof getStatsTimeseries>>, TError = ErrorModel>(
+ params?: GetStatsTimeseriesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getStatsTimeseries>>, TError, TData>>, request?: SecondParameter<typeof firnFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Time-bucketed metric series (tps/gasPct/blockTime/fee)
+ */
+
+export function useGetStatsTimeseries<TData = Awaited<ReturnType<typeof getStatsTimeseries>>, TError = ErrorModel>(
+ params?: GetStatsTimeseriesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getStatsTimeseries>>, TError, TData>>, request?: SecondParameter<typeof firnFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = useGetStatsTimeseriesQueryOptions(params,options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 

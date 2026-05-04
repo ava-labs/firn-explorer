@@ -9,9 +9,10 @@ import {
   useChain,
   useL1Uptime,
   useL1Validator,
+  usePeers,
   useValidators,
 } from "@/lib/api/queries";
-import type { L1UptimeEntry, Validator } from "@/lib/api/queries";
+import type { L1UptimeEntry, Peer, Validator } from "@/lib/api/queries";
 import { useNowTick } from "@/lib/use-fresh";
 import { FilterBar, FilterInput, FilterPillGroup } from "@/components/lattice/filter-bar";
 import { formatNumber } from "@/lib/format";
@@ -121,6 +122,11 @@ export default function ValidatorsPage() {
   // Optional: subnet-evm /validators namespace may or may not be wired up.
   // Errors are non-fatal — we just render uptime as "—" per row.
   const { data: l1Uptime } = useL1Uptime();
+  // Optional: avalanchego /ext/info via firn's /v1/peers. 503 when firn
+  // wasn't pointed at an info-exposing node (public RPC providers don't
+  // expose this). Hooks return undefined data on error and we degrade
+  // gracefully — the per-row peer line just doesn't render.
+  const { data: peersData } = usePeers();
   const [sort, setSort] = useState<SortKey>("weight");
   const [filter, setFilter] = useState("");
   const [connected, setConnected] = useState<ConnectedFilter>("any");
@@ -152,6 +158,35 @@ export default function ValidatorsPage() {
   // every render when vsResp is undefined.
   const validators = useMemo(() => vsResp?.validators ?? [], [vsResp]);
   const isPrimary = chain?.subnetId === "11111111111111111111111111111111LpoYY";
+
+  // Peer map keyed on nodeID, built from /v1/peers (avalanchego's
+  // info.peers proxied by firn). Coverage is "peers our local
+  // avalanchego currently gossips with" — a strict subset of the
+  // validator set, since not every validator on this subnet is
+  // necessarily peered to our node right now. The validator row falls
+  // back to "—" when there's no hit.
+  const peerByNode = useMemo(() => {
+    const m = new Map<string, Peer>();
+    for (const p of peersData?.peers ?? []) {
+      m.set(p.nodeID, p);
+    }
+    return m;
+  }, [peersData]);
+  const peerFor = (v: Validator): Peer | undefined => peerByNode.get(v.nodeID);
+
+  // How many validators are currently in our peer table vs the total
+  // active set. Operator signal: a low ratio usually means our node is
+  // poorly connected to its peers, not that those validators are
+  // offline. Distinct from "avg uptime" (which reports the network's
+  // consensus on validator reachability).
+  const peeredCount = useMemo(() => {
+    if (!peerByNode.size || !validators.length) return 0;
+    let n = 0;
+    for (const v of validators) {
+      if (peerByNode.has(v.nodeID)) n++;
+    }
+    return n;
+  }, [validators, peerByNode]);
 
   const filtered = useMemo(() => {
     const term = filter.trim().toLowerCase();
@@ -313,11 +348,27 @@ export default function ValidatorsPage() {
               : "needs /validators proxy"
           }
         />
-        <KpiTile
-          label="BLS-equipped"
-          value={`${formatNumber(totals.blsCount)} / ${formatNumber(totals.count)}`}
-          sub="publicKey set"
-        />
+        {/* "Peered" replaces the BLS-equipped tile when the operator
+            wired -info-rpc — peer connectivity is a more actionable
+            day-to-day signal than BLS adoption. Falls back to BLS when
+            /v1/peers is disabled (503 → undefined). */}
+        {peersData ? (
+          <KpiTile
+            label="Peered"
+            value={`${formatNumber(peeredCount)} / ${formatNumber(totals.count)}`}
+            sub={
+              peersData.numPeers > peeredCount
+                ? `${formatNumber(peersData.numPeers)} total in /ext/info`
+                : "in our node's peer table"
+            }
+          />
+        ) : (
+          <KpiTile
+            label="BLS-equipped"
+            value={`${formatNumber(totals.blsCount)} / ${formatNumber(totals.count)}`}
+            sub="publicKey set"
+          />
+        )}
         <div style={{ padding: "20px 18px" }}>
           <div className="eyebrow mb-2.5">Subnet</div>
           {chain?.subnetId ? (
@@ -456,6 +507,7 @@ export default function ValidatorsPage() {
                   isPrimary={isPrimary}
                   totalWeight={totals.totalWeight}
                   uptime={uptimeFor(v)}
+                  peer={peerFor(v)}
                 />
               ))
             )}
@@ -472,12 +524,14 @@ function ValidatorRow({
   isPrimary,
   totalWeight,
   uptime,
+  peer,
 }: {
   v: Validator;
   symbol: string;
   isPrimary: boolean;
   totalWeight: string;
   uptime: string | number | undefined;
+  peer: Peer | undefined;
 }) {
   const router = useRouter();
   const href = `/validators/${encodeURIComponent(v.nodeID)}`;
@@ -512,19 +566,22 @@ function ValidatorRow({
       aria-label={`Open validator ${v.nodeID}`}
     >
       <td>
-        <Link
-          href={href}
-          onClick={(e) => e.stopPropagation()}
-          className="hash-link mono"
-          style={{
-            textDecoration: "none",
-            color: "var(--accent-ink)",
-            fontSize: 12.5,
-            wordBreak: "break-all",
-          }}
-        >
-          {v.nodeID}
-        </Link>
+        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <Link
+            href={href}
+            onClick={(e) => e.stopPropagation()}
+            className="hash-link mono"
+            style={{
+              textDecoration: "none",
+              color: "var(--accent-ink)",
+              fontSize: 12.5,
+              wordBreak: "break-all",
+            }}
+          >
+            {v.nodeID}
+          </Link>
+          <PeerSubline peer={peer} />
+        </div>
       </td>
       <td className="mono" style={{ textAlign: "right" }}>
         {isPrimary ? formatAvax(v.stakeAmount ?? v.weight, symbol) : formatWeight(v.weight)}
@@ -612,6 +669,81 @@ function cmpBig(a: string | undefined, b: string | undefined): number {
   } catch {
     return 0;
   }
+}
+
+/**
+ * Compact P2P-context line shown under each validator's nodeID.
+ * Renders only when our local node is currently peered with this
+ * validator (info.peers had a row); otherwise a tiny dim "not peered"
+ * label so operators can tell the difference between "no peer info
+ * available at all" (firn lacks /ext/info) and "we just don't see this
+ * one." Tooltip carries the full PublicIP, version, and timestamps for
+ * the curious.
+ *
+ * Privacy note: PublicIP is by definition advertised on the P2P
+ * network; it's the same value avalanchego ships in `appRequest` and
+ * peer-list gossip. Surfacing it here doesn't leak anything operators
+ * haven't already broadcasted.
+ */
+function PeerSubline({ peer }: { peer: Peer | undefined }) {
+  if (!peer) {
+    return (
+      <span
+        className="mono"
+        style={{ fontSize: 10.5, color: "var(--ink-4)" }}
+        title="Not in our local node's peer table. Either firn isn't pointed at an /ext/info-exposing avalanchego (try -info-rpc), or the validator isn't currently gossiping with our node."
+      >
+        not peered
+      </span>
+    );
+  }
+  const host = peer.publicIP || peer.ip;
+  const obs = parseFloat(peer.observedUptime || "");
+  const obsLabel = Number.isFinite(obs) ? `${obs.toFixed(1)}%` : null;
+  const titleParts = [
+    peer.publicIP ? `publicIP=${peer.publicIP}` : "",
+    peer.ip && peer.ip !== peer.publicIP ? `ip=${peer.ip}` : "",
+    peer.version ? `version=${peer.version}` : "",
+    peer.lastSent ? `lastSent=${peer.lastSent}` : "",
+    peer.lastReceived ? `lastReceived=${peer.lastReceived}` : "",
+    peer.benched && peer.benched.length > 0 ? `benched=${peer.benched.length}` : "",
+  ].filter(Boolean);
+  const benched = (peer.benched ?? []).length;
+  return (
+    <span
+      className="mono"
+      title={titleParts.join("\n")}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 8,
+        fontSize: 10.5,
+        color: "var(--ink-3)",
+        flexWrap: "wrap",
+      }}
+    >
+      <span style={{ color: "var(--ink-2)" }}>{host}</span>
+      {peer.version ? (
+        <span style={{ color: "var(--ink-4)" }}>{peer.version.replace(/^avalanche\//, "")}</span>
+      ) : null}
+      {obsLabel ? (
+        <span
+          style={{ color: obs >= 99 ? "oklch(0.62 0.13 145)" : "var(--ink-4)" }}
+          title="Observed uptime — percentage of consensus polls this peer has answered, from our local node's perspective."
+        >
+          obs {obsLabel}
+        </span>
+      ) : null}
+      {benched > 0 ? (
+        <span
+          style={{ color: "var(--warn)" }}
+          title="Number of subnets where this peer has been benched (stopped responding to consensus polls)."
+        >
+          benched {benched}
+        </span>
+      ) : null}
+    </span>
+  );
 }
 
 function KpiTile({ label, value, sub }: { label: string; value: string; sub: string }) {

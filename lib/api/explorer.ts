@@ -11,7 +11,7 @@ import type {
   Block,
   Chain,
   ExplorerBootstrap as GeneratedExplorerBootstrap,
-  Stats,
+  ExplorerStats as GeneratedExplorerStats,
   Transaction,
 } from "./generated/schemas";
 import type { ICMMessage } from "./queries";
@@ -30,12 +30,11 @@ export interface ExplorerTPS {
   points: number[];
 }
 
-export interface ExplorerStats extends Stats {
-  tps: ExplorerTPS;
-  /** Gas-utilization series (0–100% of block gas limit). Same shape as
-   *  TPS. Frontend toggles between the two on the home chart. */
-  gasUtilization: ExplorerTPS;
-}
+/** ExplorerStats is the shape returned by /v1/explorer/bootstrap's
+ *  `stats` field. The generated schema already carries tps + gasUtilization
+ *  (the bootstrap endpoint produces them server-side); we re-export it
+ *  here unchanged so the existing component code keeps the legacy name. */
+export type ExplorerStats = GeneratedExplorerStats;
 
 export interface ExplorerBootstrap {
   /** Monotonic anchor for the SSE feed's Last-Event-ID resume. */
@@ -245,7 +244,7 @@ function mergeTickIntoBootstrap(
 
     const advance = Math.max(1, tick.shift);
     const tpsPoints = [
-      ...prev.stats.tps.points.slice(advance),
+      ...(prev.stats.tps.points ?? []).slice(advance),
       ...new Array(advance).fill(tick.tpsPoint),
     ].slice(-prev.stats.tps.windowSize);
     // Gas series rolls in lockstep with TPS — same advance, same window.
@@ -308,7 +307,7 @@ function mergeTickIntoBootstrap(
 
 export function useExplorerTps(): number[] | undefined {
   const { data } = useExplorerBootstrap();
-  return data?.stats.tps.points;
+  return data?.stats.tps.points ?? undefined;
 }
 
 // silence unused-import warning when tree-shaking removes the inner

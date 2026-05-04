@@ -18,14 +18,20 @@ limit?: number;
 cursor?: string;
 /**
  * Filter by miner address (0x-prefixed hex)
+ * @maxLength 42
+ * @pattern ^(0x)?[0-9a-fA-F]{40}$
  */
 miner?: string;
 /**
  * Inclusive lower bound on block number (decimal)
+ * @maxLength 20
+ * @pattern ^[0-9]+$
  */
 from?: string;
 /**
  * Inclusive upper bound on block number (decimal)
+ * @maxLength 20
+ * @pattern ^[0-9]+$
  */
 to?: string;
 };

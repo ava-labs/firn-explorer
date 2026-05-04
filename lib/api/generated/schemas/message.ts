@@ -8,6 +8,7 @@ import type { AppMessage } from './appMessage';
 import type { BlockRef } from './blockRef';
 import type { TeleporterFeeInfoDecoded } from './teleporterFeeInfoDecoded';
 import type { TeleporterMessageDecoded } from './teleporterMessageDecoded';
+import type { TokenRef } from './tokenRef';
 import type { WarpEnvelope } from './warpEnvelope';
 
 export interface Message {
@@ -26,6 +27,7 @@ export interface Message {
   /** @minimum 0 */
   logIndex: number;
   messageId?: string;
+  originToken?: TokenRef;
   rawData?: string;
   rewardAddress?: string;
   sender?: string;

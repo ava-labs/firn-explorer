@@ -4,6 +4,7 @@
  * firn
  * OpenAPI spec version: 0.1.0
  */
+import type { ListTransactionsStatus } from './listTransactionsStatus';
 
 export type ListTransactionsParams = {
 /**
@@ -18,14 +19,18 @@ limit?: number;
 cursor?: string;
 /**
  * Filter to txs touching this address (from or to)
+ * @maxLength 42
+ * @pattern ^(0x)?[0-9a-fA-F]{40}$
  */
 address?: string;
 /**
  * Filter by 4-byte selector (with or without 0x prefix)
+ * @maxLength 10
+ * @pattern ^(0x)?[0-9a-fA-F]{8}$
  */
 method?: string;
 /**
  * Filter by status ("success" | "failed")
  */
-status?: string;
+status?: ListTransactionsStatus;
 };
