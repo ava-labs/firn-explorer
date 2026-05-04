@@ -17,6 +17,12 @@
  * Same `preserveAspectRatio="none"` trick as Sparkline so the chart
  * fills its container width without distorting the path's vertical
  * resolution.
+ *
+ * Single-point degenerate case: when the window only has one bucket
+ * with data (chain is younger than the window, or only the most
+ * recent hour saw activity) we render full-width horizontal stacked
+ * bars instead of a path. A path through one point collapses to a
+ * single x-coord and renders as nothing.
  */
 
 export interface StackedAreaPoint {
@@ -24,12 +30,7 @@ export interface StackedAreaPoint {
   by: Record<string, number>;
 }
 
-export interface CategoryColor {
-  label: string;
-  color: string;
-}
-
-// Deterministic palette. Uses OKLCH so the colors look balanced in
+// Deterministic palette. OKLCH hues are chosen to read balanced in
 // dark mode and stay distinguishable for color-vision-deficient users
 // (different hue + similar chroma).
 const PALETTE: Record<string, string> = {
@@ -81,9 +82,9 @@ export function StackedArea({
     );
   }
 
-  // Aggregate totals per category across the whole window — used for
-  // share % (legend) and to decide which categories survive vs. fold
-  // into Other.
+  // Aggregate totals per category across the whole window — used both
+  // for the share % legend and to decide which categories survive vs.
+  // fold into Other.
   const totals = new Map<string, number>();
   for (const p of data) {
     for (const [k, v] of Object.entries(p.by)) {
@@ -102,80 +103,111 @@ export function StackedArea({
     series.push({ label: "Other", total: tailTotal, color: OTHER_COLOR });
   }
   const grandTotal = series.reduce((a, s) => a + s.total, 0);
+  const knownTopSet = new Set(top.map((t) => t.label));
 
-  // Per-point stacking. yTotal is the height (in series-units) at each
-  // sample, scaled to fit `height - pad` at the maximum.
-  const labels = series.map((s) => s.label);
-  const yTotals = data.map((p) => {
-    let sum = 0;
-    for (const l of labels) sum += p.by[l] ?? 0;
-    if ("Other" in p.by && labels.includes("Other")) {
-      // already included
-    } else if (labels.includes("Other")) {
-      // synthesize Other from labels NOT in `top`
-      const known = new Set(top.map((t) => t.label));
-      let other = 0;
-      for (const [k, v] of Object.entries(p.by)) {
-        if (!known.has(k)) other += v;
+  // Resolve per-point per-category value. "Other" is the sum of any
+  // category in the point that isn't in the topN set.
+  function valueAt(pi: number, label: string): number {
+    if (label === "Other") {
+      let s = 0;
+      for (const [k, v] of Object.entries(data[pi].by)) {
+        if (!knownTopSet.has(k)) s += v;
       }
-      sum += other;
+      return s;
     }
-    return sum;
-  });
+    return data[pi].by[label] ?? 0;
+  }
+
+  // Per-point stacked totals — needed for the y-axis ceiling.
+  const yTotals = data.map((_, pi) => series.reduce((a, s) => a + valueAt(pi, s.label), 0));
   const yMax = Math.max(1, ...yTotals) * 1.05;
+  const yAt = (cum: number) => height - (cum / yMax) * (height - 4) - 2;
 
   const n = data.length;
   const pad = 4;
-  const xAt = (i: number) => (n === 1 ? width / 2 : (i * (width - pad * 2)) / (n - 1) + pad);
-  const yAt = (cum: number) => height - (cum / yMax) * (height - 4) - 2;
 
-  // Per-category cumulative arrays. Index 0 is the bottom of stack 0
-  // (which is the highest-share series, drawn at the bottom visually).
-  // We render series in REVERSE order so the topmost path covers the
-  // lower stacks correctly (last-drawn wins in SVG).
-  const cumBelow: number[][] = Array(n)
-    .fill(null)
-    .map(() => []);
+  // Single-bucket degenerate case: render as horizontal stacked bars
+  // spanning the full width. Reads as "this window total split by
+  // category" without the visual ambiguity of a 1-px-wide path.
+  if (n === 1) {
+    const left = pad;
+    const right = width - pad;
+    // Pre-compute the cumulative stack so the JSX map below stays
+    // purely functional (no in-render mutation, eslint-clean under
+    // react-hooks/immutability).
+    const cumulative: number[] = [];
+    {
+      let running = 0;
+      for (const s of series) {
+        cumulative.push(running);
+        running += valueAt(0, s.label);
+      }
+    }
+    const bars = series.map((s, i) => {
+      const yBelow = cumulative[i];
+      const yAbove = yBelow + valueAt(0, s.label);
+      return {
+        s,
+        y: yAt(yAbove),
+        h: yAt(yBelow) - yAt(yAbove),
+      };
+    });
+    return (
+      <div style={{ width: "100%" }}>
+        <svg
+          width="100%"
+          height={height}
+          viewBox={`0 0 ${width} ${height}`}
+          preserveAspectRatio="none"
+          className="block"
+          aria-hidden
+        >
+          {bars.map((b, i) => (
+            <rect
+              key={i}
+              x={left}
+              y={b.y}
+              width={right - left}
+              height={Math.max(0, b.h)}
+              fill={b.s.color}
+              opacity={0.92}
+            />
+          ))}
+        </svg>
+        <Legend series={series} grandTotal={grandTotal} />
+      </div>
+    );
+  }
+
+  // Normal path: ≥2 points → cumulative-stack polygons.
+  const xAt = (i: number) => (i * (width - pad * 2)) / (n - 1) + pad;
+
+  // Per-point cumulative sum BELOW each series, computed once. cumBelow[pi][si]
+  // is the stack height at point pi underneath series si.
+  const cumBelow: number[][] = Array.from({ length: n }, () => []);
   for (let pi = 0; pi < n; pi++) {
     let acc = 0;
     for (const s of series) {
       cumBelow[pi].push(acc);
-      const known = new Set(top.map((t) => t.label));
-      const val =
-        s.label === "Other"
-          ? Object.entries(data[pi].by)
-              .filter(([k]) => !known.has(k))
-              .reduce((a, [, v]) => a + v, 0)
-          : (data[pi].by[s.label] ?? 0);
-      acc += val;
+      acc += valueAt(pi, s.label);
     }
   }
 
-  // Build paths bottom-up for correct stacking.
+  // Build paths bottom-up. SVG draws last-on-top, but we use independent
+  // closed polygons so order only matters for visual layering when
+  // alpha is < 1. Each polygon is `top edge L→R` + `bottom edge R→L`.
   const paths = series.map((s, sIdx) => {
-    const top: string[] = [];
-    const bottom: string[] = [];
+    const topEdge: string[] = [];
+    const bottomEdge: string[] = [];
     for (let pi = 0; pi < n; pi++) {
       const x = xAt(pi);
-      const known = new Set(series.slice(0, sIdx).map((q) => q.label));
-      const knownTop = new Set(top.map((q) => q));
-      void knownTop;
       const yBelow = cumBelow[pi][sIdx];
-      const knownLabels = new Set(["Other", ...series.map((q) => q.label)]);
-      void knownLabels;
-      void known;
-      const val =
-        s.label === "Other"
-          ? Object.entries(data[pi].by)
-              .filter(([k]) => !labels.slice(0, sIdx).includes(k))
-              .reduce((a, [, v]) => a + v, 0)
-          : (data[pi].by[s.label] ?? 0);
-      const yAbove = yBelow + val;
-      top.push(`${pi === 0 ? "M" : "L"}${x.toFixed(2)},${yAt(yAbove).toFixed(2)}`);
-      bottom.push(`L${x.toFixed(2)},${yAt(yBelow).toFixed(2)}`);
+      const yAbove = yBelow + valueAt(pi, s.label);
+      topEdge.push(`${pi === 0 ? "M" : "L"}${x.toFixed(2)},${yAt(yAbove).toFixed(2)}`);
+      bottomEdge.push(`L${x.toFixed(2)},${yAt(yBelow).toFixed(2)}`);
     }
-    bottom.reverse();
-    return { d: top.join(" ") + " " + bottom.join(" ") + " Z", color: s.color };
+    bottomEdge.reverse();
+    return { d: topEdge.join(" ") + " " + bottomEdge.join(" ") + " Z", color: s.color };
   });
 
   return (
@@ -192,37 +224,44 @@ export function StackedArea({
           <path key={i} d={p.d} fill={p.color} stroke="none" opacity={0.92} />
         ))}
       </svg>
-      {/* Legend */}
-      <ul
-        className="mono mt-2 flex flex-wrap"
-        style={{ listStyle: "none", margin: 0, padding: 0, fontSize: 11.5, gap: "6px 18px" }}
-      >
-        {series.map((s) => {
-          const pct = grandTotal > 0 ? (s.total / grandTotal) * 100 : 0;
-          return (
-            <li
-              key={s.label}
-              className="flex items-center gap-1.5"
-              style={{ color: "var(--ink-3)" }}
-            >
-              <span
-                style={{
-                  width: 9,
-                  height: 9,
-                  borderRadius: 2,
-                  background: s.color,
-                  display: "inline-block",
-                  flex: "none",
-                }}
-              />
-              <span style={{ color: "var(--ink-2)" }}>{s.label}</span>
-              <span style={{ color: "var(--ink-4)", fontVariantNumeric: "tabular-nums" }}>
-                {pct >= 10 ? pct.toFixed(0) : pct.toFixed(1)}%
-              </span>
-            </li>
-          );
-        })}
-      </ul>
+      <Legend series={series} grandTotal={grandTotal} />
     </div>
+  );
+}
+
+function Legend({
+  series,
+  grandTotal,
+}: {
+  series: Array<{ label: string; total: number; color: string }>;
+  grandTotal: number;
+}) {
+  return (
+    <ul
+      className="mono mt-2 flex flex-wrap"
+      style={{ listStyle: "none", margin: 0, padding: 0, fontSize: 11.5, gap: "6px 18px" }}
+    >
+      {series.map((s) => {
+        const pct = grandTotal > 0 ? (s.total / grandTotal) * 100 : 0;
+        return (
+          <li key={s.label} className="flex items-center gap-1.5" style={{ color: "var(--ink-3)" }}>
+            <span
+              style={{
+                width: 9,
+                height: 9,
+                borderRadius: 2,
+                background: s.color,
+                display: "inline-block",
+                flex: "none",
+              }}
+            />
+            <span style={{ color: "var(--ink-2)" }}>{s.label}</span>
+            <span style={{ color: "var(--ink-4)", fontVariantNumeric: "tabular-nums" }}>
+              {pct >= 10 ? pct.toFixed(0) : pct.toFixed(1)}%
+            </span>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
