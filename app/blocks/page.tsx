@@ -73,8 +73,15 @@ export default function BlocksPage() {
 
   const blocks = page?.data;
   const freshBlocks = useFreshHashes(blocks);
-  // 10Hz so age labels animate smoothly through Xms → s → m boundaries.
-  useNowTick(100);
+  // 1s tick is enough to keep relative-time labels accurate; the prior
+  // 100ms churn re-rendered the whole page (huge headline, 50-row
+  // table, 3 charts, KPIs, live list) ten times a second. Combined
+  // with concurrent CSS animations (fresh-row, AnimatedNumber tween),
+  // that re-render rate disengaged the browser's scroll anchor and
+  // caused the page to feel like it was drifting downward as new
+  // blocks landed. The relative-time labels don't need finer than 1s
+  // anyway — `formatRelativeTime` rounds to the nearest second.
+  useNowTick(1000);
 
   // Page-scoped averages — only across the visible page so it's responsive
   // to any filter the user applied. Useful when scoping by validator: you
@@ -756,8 +763,8 @@ function LiveBlocksList({
                   borderRadius: 0,
                   gridTemplateColumns: "120px 1fr 80px",
                   padding: "14px 18px",
-                  background: isHead ? "var(--accent-soft)" : "transparent",
-                  color: isHead ? "var(--accent-ink)" : "inherit",
+                  background: isHead ? "var(--good-soft)" : "transparent",
+                  color: isHead ? "var(--good)" : "inherit",
                   cursor: "pointer",
                 }}
               >
@@ -766,7 +773,7 @@ function LiveBlocksList({
                     className="mono"
                     style={{
                       fontSize: 13,
-                      color: isHead ? "var(--accent-ink)" : "var(--ink)",
+                      color: isHead ? "var(--good)" : "var(--ink)",
                       fontVariantNumeric: "tabular-nums",
                     }}
                   >
@@ -776,7 +783,7 @@ function LiveBlocksList({
                     className="mono"
                     style={{
                       fontSize: 11,
-                      color: isHead ? "var(--accent-ink)" : "var(--ink-4)",
+                      color: isHead ? "var(--good)" : "var(--ink-4)",
                       fontVariantNumeric: "tabular-nums",
                       opacity: 0.85,
                     }}
@@ -790,20 +797,18 @@ function LiveBlocksList({
                   <div
                     style={{
                       fontSize: 12.5,
-                      color: isHead ? "var(--accent-ink)" : "var(--ink-2)",
+                      color: isHead ? "var(--good)" : "var(--ink-2)",
                       fontVariantNumeric: "tabular-nums",
                     }}
                   >
                     {formatNumber(b.transactionsCount)}{" "}
-                    <span style={{ color: isHead ? "var(--accent-ink)" : "var(--ink-4)" }}>
-                      txns
-                    </span>
+                    <span style={{ color: isHead ? "var(--good)" : "var(--ink-4)" }}>txns</span>
                   </div>
                   <div
                     className="mono"
                     style={{
                       fontSize: 10.5,
-                      color: isHead ? "var(--accent-ink)" : "var(--ink-4)",
+                      color: isHead ? "var(--good)" : "var(--ink-4)",
                       opacity: 0.85,
                       overflow: "hidden",
                       textOverflow: "ellipsis",
@@ -818,7 +823,7 @@ function LiveBlocksList({
                   className="mono"
                   style={{
                     fontSize: 12,
-                    color: isHead ? "var(--accent-ink)" : "var(--ink-2)",
+                    color: isHead ? "var(--good)" : "var(--ink-2)",
                     textAlign: "right",
                     fontVariantNumeric: "tabular-nums",
                   }}
@@ -837,7 +842,7 @@ function LiveBlocksList({
                       style={{
                         width: `${Math.min(100, pct)}%`,
                         height: "100%",
-                        background: isHead ? "var(--accent-ink)" : gasUtilTone(pct),
+                        background: isHead ? "var(--good)" : gasUtilTone(pct),
                       }}
                     />
                   </div>
