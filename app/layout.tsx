@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import Script from "next/script";
 import { Providers } from "./providers";
 import { Topbar } from "@/components/lattice/topbar";
+import { ExperimentalBanner } from "@/components/lattice/experimental-banner";
 import { Footer } from "@/components/lattice/footer";
 import type { TenantInfo } from "@/lib/api/network";
 import "./globals.css";
@@ -92,6 +93,7 @@ export default async function RootLayout({
           dangerouslySetInnerHTML={{ __html: themeBootstrap }}
         />
         <Providers tenant={tenant}>
+          <ExperimentalBanner />
           <Topbar />
           <main>{children}</main>
           <Footer />
