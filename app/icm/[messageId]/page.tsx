@@ -28,7 +28,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { CopyButton } from "@/components/lattice/copy-button";
 import { VerifiedContractChip } from "@/components/lattice/verified-chip";
 import { ErrorBanner } from "@/components/page/error-banner";
-import { useICMMessages, useChain } from "@/lib/api/queries";
+import { useICMMessages, useChain, useToken } from "@/lib/api/queries";
 import type {
   AppMessage,
   AppMessageFieldNode,
@@ -69,6 +69,7 @@ export default function ICMMessageDetailPage({ params }: PageProps) {
 
   const lifecycle = useMemo(() => deriveLifecycle(events), [events]);
   const sides = useMemo(() => deriveSides(events, localChainId), [events, localChainId]);
+  const ictt = useMemo(() => deriveICTT(events), [events]);
 
   if (!messageId) {
     return (
@@ -82,12 +83,18 @@ export default function ICMMessageDetailPage({ params }: PageProps) {
     <div className="px-4 sm:px-6 lg:px-10 py-6 sm:py-8 pb-12">
       <div className="eyebrow mb-2.5">
         <Link href="/icm" style={{ color: "inherit", textDecoration: "none" }}>
-          ICM
-        </Link>{" "}
-        · Message
+          {ictt ? "ICTT · INTERCHAIN TOKEN TRANSFER" : "ICM · MESSAGE"}
+        </Link>
       </div>
 
       <div className="flex items-baseline gap-3 mb-3 flex-wrap">
+        {/* Headline: short messageId next to a status badge, mirroring
+            the explorer convention where the page identity sits beside
+            its lifecycle state. The big bytes32 lands below for copy/
+            paste; this short form is what the eye reads first. */}
+        <span className="h-display" style={{ fontSize: 22, lineHeight: 1.25, color: "var(--ink)" }}>
+          {`icm_${shortHex(messageId, 4)}`}
+        </span>
         {lifecycle ? <LifecycleChip status={lifecycle.status} /> : null}
         {events && events.length > 0 ? (
           <Chip tone={events[0].kind === "teleporter" ? "steel" : "default"}>
@@ -97,23 +104,37 @@ export default function ICMMessageDetailPage({ params }: PageProps) {
         <CopyButton text={messageId} />
       </div>
 
-      {/* Full messageId, no truncation. Renders large because it IS the
-          page's primary identifier — the user came here from a row that
-          showed only the first 10 hex chars and now wants the whole
-          thing for cross-referencing on Etherscan, source debugging,
-          etc. wordBreak lets the 66-char hex wrap onto two lines on
-          narrower viewports rather than overflowing. */}
+      {/* Full messageId, monospace, no truncation. Renders below the
+          headline as the canonical identifier — users came here from a
+          row that showed the short form and need the whole 66-char hex
+          to cross-reference. wordBreak handles narrow viewports. */}
       <div
-        className="h-display mb-7"
-        style={{ fontSize: 22, lineHeight: 1.25, wordBreak: "break-all" }}
+        className="mono mb-7"
+        style={{
+          fontSize: 12,
+          color: "var(--ink-3)",
+          wordBreak: "break-all",
+          lineHeight: 1.5,
+        }}
       >
         {messageId}
       </div>
 
-      {/* Source ↔ destination at a glance — same shape as the index page
-          row but rendered larger so it's the first thing the eye lands
-          on after the headline. */}
-      {sides ? <SidesCard sides={sides} /> : null}
+      {/* ICTT-specific summary + transfer flow visualization. Renders
+          only when the appMessage decoded as a recognized ICTT shape.
+          Falls through to the generic SidesCard for non-ICTT messages
+          (raw Teleporter, custom dapps, Warp-only flows). */}
+      {ictt ? (
+        <>
+          <ICTTSummaryCard ictt={ictt} lifecycle={lifecycle} />
+          <div style={{ height: 16 }} />
+          <TransferFlow ictt={ictt} />
+          <div style={{ height: 24 }} />
+          <ICTTOverview ictt={ictt} messageId={messageId} />
+        </>
+      ) : sides ? (
+        <SidesCard sides={sides} />
+      ) : null}
 
       {error ? <ErrorBanner title="Couldn't load this message." message={error.message} /> : null}
 
@@ -915,4 +936,641 @@ function byteLengthOfHex(hex: string): number {
   if (!hex) return 0;
   const h = hex.startsWith("0x") ? hex.slice(2) : hex;
   return h.length / 2;
+}
+
+// ---------------------------------------------------------------------------
+// ICTT-specific summary view
+// ---------------------------------------------------------------------------
+
+/**
+ * ICTTContext is everything the summary card + transfer flow + overview
+ * need, derived from the events list. Pulled out as a single shape so
+ * the rendering components don't repeat the lookup gymnastics.
+ *
+ * Fields are intentionally optional: this is a destination-side view of
+ * a cross-chain message, so any field that lives only on the SOURCE
+ * chain ("source tx hash", "source-side fee paid in source gas token")
+ * stays undefined and renders as N/A. The user already accepted that
+ * tradeoff — federation/cross-chain join is a separate piece of work.
+ */
+interface ICTTContext {
+  kindLabel: string; // SINGLE_HOP_SEND etc.
+  // The ICTT TokenRemote / TokenHome contract on the local chain. For
+  // a destination-side ReceiveCrossChainMessage this is the
+  // teleporterMessage.destinationAddress (the remote that mints/
+  // releases tokens for this transfer). For a source-side
+  // SendCrossChainMessage it's the originSenderAddress. Either way,
+  // it's the on-chain ICTT token contract — useToken() resolves
+  // symbol + decimals.
+  tokenAddress?: string;
+  // Local-chain participants. originSender = who initiated the send on
+  // the source chain (renders as "Sender" in the overview; survives
+  // across the bridge as TeleporterMessage.originSenderAddress).
+  // recipient = the on-destination wallet that gets the funds (decoded
+  // out of the appMessage SINGLE_HOP_SEND payload).
+  sender?: string;
+  recipient?: string;
+  // Decimal-string uint256 amount, without decimals applied. The token
+  // hook resolves decimals separately so we can format inline.
+  amountRaw?: string;
+  // Chain identity for both sides. Names are best-effort from the
+  // P-Chain blockchain resolver; the cb58/0x ID is the canonical fallback.
+  sourceChainName?: string;
+  sourceChainId?: string;
+  destChainName?: string;
+  destChainId?: string;
+  // Tx + relayer + reward (destination side only).
+  destTxHash?: string;
+  destBlockTimestamp?: string;
+  deliverer?: string;
+  rewardAddress?: string;
+  // The MessageExecuted event, when present, marks final settlement
+  // on the destination chain. Used to render an end-to-end timing
+  // hint — but only relative to the Receive block (not the Send) since
+  // we don't have the source side.
+  receiveAt?: string;
+  executedAt?: string;
+}
+
+function deriveICTT(events: ICMMessage[] | undefined): ICTTContext | null {
+  if (!events || events.length === 0) return null;
+  // Find the event whose appMessage decoded as ICTT. Receive carries the
+  // full payload; MessageExecuted has only the messageId so the appMsg
+  // is empty there. We accept ANY event with a recognized ICTT decode
+  // — first match wins.
+  let app: AppMessage | undefined;
+  let receive: ICMMessage | undefined;
+  let executed: ICMMessage | undefined;
+  for (const e of events) {
+    if (!app && e.appMessage?.protocol === "ICTT" && e.appMessage.kindLabel) {
+      app = e.appMessage;
+    }
+    if (!receive && e.event === "ReceiveCrossChainMessage") receive = e;
+    if (!executed && e.event === "MessageExecuted") executed = e;
+  }
+  if (!app || !app.kindLabel) return null;
+  const fields = app.fields ?? [];
+  const fieldMap = new Map(fields.map((f) => [f.name, f.value] as const));
+  // The destination-side ICTT contract is the TokenRemote that received
+  // the message. teleporterMessage.destinationAddress on the Receive
+  // event names it directly. Fallback to the contract that emitted the
+  // most recent event on this chain (the canonical Teleporter address,
+  // which is NOT what we want here — so we prefer destinationAddress).
+  const tokenAddress = receive?.teleporterMessage?.destinationAddress ?? events[0].contractAddress;
+  return {
+    kindLabel: app.kindLabel,
+    tokenAddress,
+    sender: receive?.teleporterMessage?.originSenderAddress,
+    recipient: fieldMap.get("recipient"),
+    amountRaw: fieldMap.get("amount"),
+    sourceChainName: receive?.sourceBlockchainName,
+    sourceChainId: receive?.sourceBlockchainId,
+    destChainName: receive?.destinationBlockchainName,
+    destChainId: receive?.destinationBlockchainId,
+    destTxHash: receive?.transactionHash,
+    destBlockTimestamp: receive?.block.timestamp,
+    deliverer: receive?.deliverer,
+    rewardAddress: receive?.rewardAddress,
+    receiveAt: receive?.block.timestamp,
+    executedAt: executed?.block.timestamp,
+  };
+}
+
+/**
+ * Top-of-page summary card for an ICTT transfer. Renders the natural-
+ * language one-liner ("Account 0x… transferred 12,400 USDC from C-Chain
+ * to Beam L1 via Teleporter ICTT") plus a thin metadata row beneath.
+ *
+ * Token symbol + decimals come from `useToken(tokenAddress)`. While that
+ * resolves, the amount renders as the raw uint256 — the page stays
+ * useful even if the token isn't in firn's catalog yet.
+ */
+function ICTTSummaryCard({ ictt, lifecycle }: { ictt: ICTTContext; lifecycle: Lifecycle | null }) {
+  const { data: token } = useToken(ictt.tokenAddress);
+  const formatted = formatTokenAmount(ictt.amountRaw, token?.decimals);
+  const symbol = token?.symbol ?? "tokens";
+  const sourceName = ictt.sourceChainName ?? shortChainId(ictt.sourceChainId);
+  const destName = ictt.destChainName ?? shortChainId(ictt.destChainId);
+  return (
+    <div
+      className="card border border-line rounded-[10px] bg-bg-elev"
+      style={{ padding: "20px 24px" }}
+    >
+      <div className="eyebrow" style={{ marginBottom: 10 }}>
+        Summary
+      </div>
+      <div
+        style={{
+          fontSize: 17,
+          lineHeight: 1.55,
+          color: "var(--ink-2)",
+          fontWeight: 400,
+        }}
+      >
+        Account{" "}
+        {ictt.sender ? (
+          <Link
+            href={`/address/${ictt.sender}`}
+            className="mono"
+            style={{ color: "var(--ink)", textDecoration: "none", fontSize: 15 }}
+          >
+            {shortHex(ictt.sender, 4)}
+          </Link>
+        ) : (
+          <span style={{ color: "var(--ink-3)" }}>—</span>
+        )}{" "}
+        transferred{" "}
+        <span style={{ color: "var(--accent)", fontWeight: 500 }}>
+          {formatted} {symbol}
+        </span>{" "}
+        from <span style={{ color: "var(--ink)" }}>{sourceName ?? "—"}</span> to{" "}
+        <span style={{ color: "var(--ink)" }}>{destName ?? "—"}</span> via Teleporter ICTT.
+      </div>
+      <div
+        className="mono"
+        style={{
+          marginTop: 14,
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 16,
+          rowGap: 6,
+          fontSize: 11.5,
+          color: "var(--ink-4)",
+        }}
+      >
+        {ictt.destBlockTimestamp ? (
+          <span>Delivered {formatRelativeTime(ictt.destBlockTimestamp)}</span>
+        ) : null}
+        {lifecycle ? <span>Status: {lifecycle.status}</span> : null}
+        <span>· Source-side fees N/A (only destination indexed)</span>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Three-column transfer flow visualization mirroring the user's mockup:
+ *
+ *   [Source chain]  ─ LOCK ─→  [Teleporter / Relayer]  ─ DELIVER ─→  [Destination chain]
+ *
+ * On a destination-only firn deployment the LOCK arrow shows N/A
+ * (we don't have the source-chain emit time); the DELIVER arrow shows
+ * the gap between Receive and Executed when both events were captured
+ * in the same destination tx (always near-zero here).
+ */
+function TransferFlow({ ictt }: { ictt: ICTTContext }) {
+  const sourceName = ictt.sourceChainName ?? shortChainId(ictt.sourceChainId);
+  const destName = ictt.destChainName ?? shortChainId(ictt.destChainId);
+  return (
+    <div
+      className="card border border-line rounded-[10px] bg-bg-elev"
+      style={{ padding: "20px 24px" }}
+    >
+      <div className="eyebrow" style={{ marginBottom: 14 }}>
+        Transfer Flow
+      </div>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr auto 1fr auto 1fr",
+          alignItems: "center",
+          gap: 12,
+        }}
+      >
+        <FlowNode
+          letter="S"
+          chainName={sourceName ?? "—"}
+          subtext="SOURCE"
+          contract={undefined /* source-side TokenHome lives on other chain */}
+          contractLabel="TokenHome on source"
+        />
+        <FlowArrow label="LOCK" sub="source-side" />
+        <FlowNode
+          letter="T"
+          chainName="Teleporter"
+          subtext="RELAYER"
+          contract={ictt.deliverer}
+          contractLabel="Relayer"
+        />
+        <FlowArrow label="DELIVER" sub={deriveDeliverTime(ictt)} />
+        <FlowNode
+          letter="D"
+          chainName={destName ?? "—"}
+          subtext="DESTINATION"
+          contract={ictt.tokenAddress}
+          contractLabel="TokenRemote"
+        />
+      </div>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr 1fr",
+          gap: 12,
+          marginTop: 18,
+          paddingTop: 14,
+          borderTop: "1px solid var(--line-soft)",
+          fontSize: 12,
+          color: "var(--ink-3)",
+        }}
+      >
+        <span>
+          Sender ·{" "}
+          {ictt.sender ? (
+            <Link
+              href={`/address/${ictt.sender}`}
+              className="mono"
+              style={{ color: "var(--ink-2)", textDecoration: "none" }}
+            >
+              {shortHex(ictt.sender, 4)}
+            </Link>
+          ) : (
+            "—"
+          )}
+        </span>
+        <span style={{ textAlign: "center" }}>
+          Total elapsed · {deriveDeliverTime(ictt) ?? "N/A"}
+        </span>
+        <span style={{ textAlign: "right" }}>
+          Recipient ·{" "}
+          {ictt.recipient ? (
+            <Link
+              href={`/address/${ictt.recipient}`}
+              className="mono"
+              style={{ color: "var(--ink-2)", textDecoration: "none" }}
+            >
+              {shortHex(ictt.recipient, 4)}
+            </Link>
+          ) : (
+            "—"
+          )}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function FlowNode({
+  letter,
+  chainName,
+  subtext,
+  contract,
+  contractLabel,
+}: {
+  letter: string;
+  chainName: string;
+  subtext: string;
+  contract?: string;
+  contractLabel: string;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 6,
+        padding: "12px 14px",
+        borderRadius: 8,
+        border: "1px solid var(--line)",
+        background: "var(--bg-sunken, var(--bg))",
+        minWidth: 0,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <span
+          aria-hidden
+          style={{
+            display: "inline-grid",
+            placeItems: "center",
+            width: 26,
+            height: 26,
+            borderRadius: 6,
+            background: "color-mix(in oklch, var(--accent) 22%, transparent)",
+            color: "var(--accent)",
+            fontWeight: 600,
+            fontSize: 13,
+          }}
+        >
+          {letter}
+        </span>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 14, fontWeight: 500, color: "var(--ink)" }}>{chainName}</div>
+          <div className="eyebrow" style={{ fontSize: 10 }}>
+            {subtext}
+          </div>
+        </div>
+      </div>
+      <div
+        className="mono"
+        style={{
+          marginTop: 4,
+          fontSize: 11,
+          color: contract ? "var(--accent)" : "var(--ink-4)",
+          wordBreak: "break-all",
+        }}
+        title={contract ?? `${contractLabel} not on this chain`}
+      >
+        {contract ? `${contractLabel} · ${shortHex(contract, 4)}` : `${contractLabel} N/A`}
+      </div>
+    </div>
+  );
+}
+
+function FlowArrow({ label, sub }: { label: string; sub?: string }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 4,
+        minWidth: 80,
+      }}
+    >
+      <div className="eyebrow" style={{ fontSize: 10, color: "var(--ink-4)" }}>
+        {label}
+      </div>
+      <div style={{ width: "100%", display: "flex", alignItems: "center", gap: 4 }}>
+        <span style={{ flex: 1, height: 1, borderTop: "1px dashed var(--ink-4)" }} />
+        <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden>
+          <path
+            d="M2 5h6m0 0L6 3m2 2L6 7"
+            stroke="var(--ink-4)"
+            strokeWidth="1.4"
+            fill="none"
+            strokeLinecap="round"
+          />
+        </svg>
+      </div>
+      <div className="mono" style={{ fontSize: 10.5, color: "var(--good, var(--ink-3))" }}>
+        {sub ?? ""}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Field-list panel matching the "Overview" tab in the mockup. Renders
+ * one row per fact about this transfer, with N/A for source-only data.
+ * The data is the same as what lives in the timeline event cards
+ * below, just flattened + paired so the user doesn't have to scan
+ * multiple cards to answer "what amount? what token? who sent?".
+ */
+function ICTTOverview({ ictt, messageId }: { ictt: ICTTContext; messageId: string }) {
+  const { data: token } = useToken(ictt.tokenAddress);
+  const amountFormatted = formatTokenAmount(ictt.amountRaw, token?.decimals);
+  const tokenSymbol = token?.symbol;
+  const tokenName = token?.name;
+  const tokenDecimals = token?.decimals;
+  return (
+    <div className="card border border-line rounded-[10px] bg-bg-elev" style={{ padding: 0 }}>
+      <div
+        style={{
+          padding: "14px 22px",
+          borderBottom: "1px solid var(--line)",
+          display: "flex",
+          alignItems: "baseline",
+          gap: 16,
+          fontSize: 13,
+          fontWeight: 500,
+        }}
+      >
+        Overview
+        <span className="eyebrow" style={{ color: "var(--ink-4)" }}>
+          destination-side data
+        </span>
+      </div>
+      <div style={{ padding: "8px 22px 14px" }}>
+        <OverviewRow label="Message ID" mono value={messageId} />
+        <OverviewRow
+          label="Source Chain"
+          value={ictt.sourceChainName ?? shortChainId(ictt.sourceChainId) ?? "—"}
+          monoSub={ictt.sourceChainId ? shortHex(ictt.sourceChainId, 4) : undefined}
+        />
+        <OverviewRow
+          label="Destination Chain"
+          value={ictt.destChainName ?? shortChainId(ictt.destChainId) ?? "—"}
+          monoSub={ictt.destChainId ? shortHex(ictt.destChainId, 4) : undefined}
+          accent
+        />
+        <OverviewRow
+          label="Token"
+          value={
+            tokenSymbol
+              ? `${tokenName ? tokenName + " · " : ""}${tokenSymbol}`
+              : ictt.tokenAddress
+                ? "Unrecognized contract"
+                : "—"
+          }
+          monoSub={
+            tokenDecimals != null
+              ? `${tokenDecimals} decimals`
+              : ictt.tokenAddress
+                ? shortHex(ictt.tokenAddress, 4)
+                : undefined
+          }
+        />
+        <OverviewRow
+          label="Amount"
+          value={
+            <>
+              {amountFormatted}
+              {tokenSymbol ? <span style={{ color: "var(--ink-3)" }}> {tokenSymbol}</span> : null}
+            </>
+          }
+        />
+        <OverviewRow
+          label="Sender (origin)"
+          value={
+            ictt.sender ? (
+              <Link
+                href={`/address/${ictt.sender}`}
+                className="mono"
+                style={{ color: "var(--ink-2)", textDecoration: "none" }}
+              >
+                {ictt.sender}
+              </Link>
+            ) : (
+              "—"
+            )
+          }
+        />
+        <OverviewRow
+          label="Recipient"
+          value={
+            ictt.recipient ? (
+              <Link
+                href={`/address/${ictt.recipient}`}
+                className="mono"
+                style={{ color: "var(--ink-2)", textDecoration: "none" }}
+              >
+                {ictt.recipient}
+              </Link>
+            ) : (
+              "—"
+            )
+          }
+        />
+        <OverviewRow label="Source TX" value="N/A — source chain not indexed" muted />
+        <OverviewRow
+          label="Destination TX"
+          value={
+            ictt.destTxHash ? (
+              <Link
+                href={`/transactions/${ictt.destTxHash}`}
+                className="mono"
+                style={{ color: "var(--ink-2)", textDecoration: "none" }}
+              >
+                {ictt.destTxHash}
+              </Link>
+            ) : (
+              "—"
+            )
+          }
+        />
+        <OverviewRow
+          label="Relayer"
+          value={
+            ictt.deliverer ? (
+              <Link
+                href={`/address/${ictt.deliverer}`}
+                className="mono"
+                style={{ color: "var(--ink-2)", textDecoration: "none" }}
+              >
+                {ictt.deliverer}
+              </Link>
+            ) : (
+              "—"
+            )
+          }
+        />
+        <OverviewRow
+          label="Reward redeemer"
+          value={
+            ictt.rewardAddress ? (
+              <Link
+                href={`/address/${ictt.rewardAddress}`}
+                className="mono"
+                style={{ color: "var(--ink-2)", textDecoration: "none" }}
+              >
+                {ictt.rewardAddress}
+              </Link>
+            ) : (
+              "—"
+            )
+          }
+        />
+        <OverviewRow
+          label="End-to-End"
+          value={deriveDeliverTime(ictt) ?? "N/A — needs source-chain timing"}
+          muted={!deriveDeliverTime(ictt)}
+        />
+      </div>
+    </div>
+  );
+}
+
+function OverviewRow({
+  label,
+  value,
+  mono,
+  monoSub,
+  muted,
+  accent,
+}: {
+  label: string;
+  value: React.ReactNode;
+  mono?: boolean;
+  monoSub?: string;
+  muted?: boolean;
+  accent?: boolean;
+}) {
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "180px 1fr",
+        gap: 14,
+        padding: "10px 0",
+        borderTop: "1px solid var(--line-soft)",
+        alignItems: "baseline",
+        minHeight: 32,
+      }}
+    >
+      <span className="eyebrow">{label}</span>
+      <div
+        className={mono ? "mono" : undefined}
+        style={{
+          fontSize: 13,
+          color: muted ? "var(--ink-4)" : accent ? "var(--ink)" : "var(--ink-2)",
+          wordBreak: "break-all",
+          minWidth: 0,
+          display: "flex",
+          flexDirection: "column",
+          gap: 2,
+        }}
+      >
+        <span>{value}</span>
+        {monoSub ? (
+          <span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>
+            {monoSub}
+          </span>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Format a uint256 decimal-string against a known token decimals
+ * count, with thousands separators on the integer part. Falls back to
+ * the raw string with a "(raw)" tag when decimals are unknown — better
+ * than silently rendering 12400000000 as a human number.
+ */
+function formatTokenAmount(rawDecimal: string | undefined, decimals: number | undefined): string {
+  if (!rawDecimal) return "—";
+  if (decimals == null) return `${rawDecimal} (raw)`;
+  // BigInt to avoid float precision loss on uint256 inputs.
+  let n: bigint;
+  try {
+    n = BigInt(rawDecimal);
+  } catch {
+    return rawDecimal;
+  }
+  if (decimals === 0) return n.toString();
+  const base = BigInt(10) ** BigInt(decimals);
+  const whole = n / base;
+  const frac = n % base;
+  const wholeStr = formatIntegerWithCommas(whole.toString());
+  if (frac === BigInt(0)) return wholeStr;
+  // Pad fractional, strip trailing zeros, cap to 6 sig digits to keep
+  // the headline readable. The Overview row shows the full raw value
+  // separately if precision matters.
+  const fracStr = frac.toString().padStart(decimals, "0").replace(/0+$/, "").slice(0, 6);
+  return fracStr ? `${wholeStr}.${fracStr}` : wholeStr;
+}
+
+function formatIntegerWithCommas(s: string): string {
+  return s.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
+/**
+ * Best-effort timing string for the destination-side delivery: the gap
+ * between the Receive event and the MessageExecuted event when both
+ * fired in the same window. Returns undefined when we can't compute
+ * (one event missing, parse fail). Shown as "N/A" by callers when
+ * undefined — never invent a number.
+ */
+function deriveDeliverTime(ictt: ICTTContext): string | undefined {
+  if (!ictt.receiveAt || !ictt.executedAt) return undefined;
+  const r = Date.parse(ictt.receiveAt);
+  const e = Date.parse(ictt.executedAt);
+  if (!Number.isFinite(r) || !Number.isFinite(e) || e < r) return undefined;
+  const ms = e - r;
+  if (ms < 1500) return `${ms}ms`;
+  return `${(ms / 1000).toFixed(1)}s`;
+}
+
+function shortChainId(id: string | undefined): string | undefined {
+  if (!id) return undefined;
+  return shortHex(id, 4);
 }
