@@ -1224,7 +1224,7 @@ function ValidatorsCard() {
   const uptimeByNode = useMemo(() => {
     const m = new Map<string, string | number>();
     for (const e of (l1Uptime?.validators ?? []) as L1UptimeEntry[]) {
-      const u = e.uptimePercent ?? e.uptime;
+      const u = e.uptimePercentage ?? e.uptimeSeconds;
       if (u !== undefined) m.set(e.nodeID, u);
     }
     return m;

@@ -47,9 +47,12 @@ export default function ValidatorDetailPage({ params }: { params: Promise<{ node
     () => l1Uptime?.validators.find((x) => x.nodeID === nodeID),
     [l1Uptime, nodeID],
   );
-  // Resolved uptime: subnet-evm /validators wins over P-Chain `v.uptime`.
+  // Resolved uptime: subnet-evm /validators wins over P-Chain `v.uptime`
+  // because it's L1-scoped instead of primary-network-scoped. The field
+  // names here match subnet-evm's wire output (uptimePercentage /
+  // uptimeSeconds) verbatim — firn passes the JSON through unchanged.
   const resolvedUptime: string | number | undefined =
-    l1UpEntry?.uptimePercent ?? l1UpEntry?.uptime ?? v?.uptime;
+    l1UpEntry?.uptimePercentage ?? l1UpEntry?.uptimeSeconds ?? v?.uptime;
   const uptimeSource: string | undefined = l1UpEntry
     ? "subnet-evm validators.getCurrentValidators"
     : v?.uptime

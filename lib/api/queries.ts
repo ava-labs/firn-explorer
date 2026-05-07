@@ -377,9 +377,17 @@ export interface L1UptimeResponse {
 
 export interface L1UptimeEntry {
   nodeID: string;
-  uptime?: string | number;
-  uptimePercent?: string | number;
-  weight?: string;
+  // subnet-evm validators.getCurrentValidators emits these names
+  // verbatim (uptimeSeconds / uptimePercentage) and firn passes the
+  // JSON through without renaming. Keep the field names matching the
+  // upstream so the type and the wire stay in lockstep — an earlier
+  // pass mismatched them (uptime / uptimePercent), which silently
+  // resolved to undefined for every L1 and surfaced the "no uptime
+  // reported · subnet-evm tracks per-L1 uptime locally" fallback on
+  // every validator detail page despite the data being present.
+  uptimeSeconds?: number;
+  uptimePercentage?: number;
+  weight?: number | string;
   startTimestamp?: number | string;
   validationID?: string;
   isActive?: boolean;
