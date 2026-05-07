@@ -18,6 +18,7 @@ import { useLivePause, type LiveFeed } from "@/lib/api/live-pause";
 import {
   isBootstrappingError,
   useL1Uptime,
+  useTokens,
   useValidators,
   type ICMMessage,
   type L1UptimeEntry,
@@ -107,6 +108,26 @@ export default function Home() {
   const localChainId = chain?.blockchainId;
   const freshIcm = useFreshKeys(icmMessages, (m) => `${m.transactionHash}-${m.logIndex}`, 1600);
   const symbol = chain?.nativeToken.symbol ?? "—";
+
+  // Token catalog for ICTT row formatting. One bulk request feeds every
+  // row's symbol+decimals lookup so we can render "0.3 HERESY" instead
+  // of bare scientific. Limit 50 = the top tokens by transfer count
+  // (firn already orders that way), which covers every chain we ship
+  // today; any contract not in the top 50 falls back to "ICTT" + the
+  // recipient with no amount, which is honest and not misleading.
+  const { data: tokenPage } = useTokens({ limit: 50 }, { enabled: !!icmMessages });
+  const tokensByAddress = useMemo(() => {
+    const m = new Map<string, { symbol?: string; name?: string; decimals: number }>();
+    for (const t of tokenPage?.data ?? []) {
+      if (!t.address) continue;
+      m.set(t.address.toLowerCase(), {
+        symbol: t.symbol,
+        name: t.name,
+        decimals: t.decimals ?? 0,
+      });
+    }
+    return m;
+  }, [tokenPage]);
   const blockTimeMs = stats?.averageBlockTimeMs ?? null;
   // Server-computed instantaneous TPS — last point of the series. No
   // client-side division, no per-render numerical jitter.
@@ -397,7 +418,10 @@ export default function Home() {
 
       {/* ICM lane — distinctive cross-chain visualization. Only renders when
           firn has at least one decoded ICM event for this L1; otherwise the
-          slot stays out of the layout entirely. */}
+          slot stays out of the layout entirely. Events are grouped by
+          messageId so a single cross-chain message that produced both a
+          ReceiveCrossChainMessage and a MessageExecuted log shows up
+          once with both pieces of state collapsed into the same row. */}
       {icmMessages && icmMessages.length > 0 ? (
         <div style={{ marginBottom: 48 }}>
           <div className="flex items-baseline justify-between mb-[18px]">
@@ -422,12 +446,13 @@ export default function Home() {
             className="card border border-line rounded-[10px] bg-bg-elev overflow-x-auto"
             style={{ padding: "8px 0" }}
           >
-            {icmMessages.map((m, i, arr) => (
+            {groupICM(icmMessages).map((g, i, arr) => (
               <ICMRow
-                key={`${m.transactionHash}-${m.logIndex}`}
-                m={m}
-                fresh={freshIcm.has(`${m.transactionHash}-${m.logIndex}`)}
+                key={g.key}
+                group={g}
+                fresh={freshIcm.has(`${g.primary.transactionHash}-${g.primary.logIndex}`)}
                 localChainId={localChainId}
+                tokensByAddress={tokensByAddress}
                 isLast={i === arr.length - 1}
               />
             ))}
@@ -608,17 +633,149 @@ export default function Home() {
   );
 }
 
+/**
+ * Aggregated view of one cross-chain message. Multiple ICM logs that
+ * share a messageId (Receive + Executed for an inbound delivery, or
+ * Send + AddFeeAmount for an outbound) collapse into a single group
+ * here so the home lane shows one row per message instead of one row
+ * per event. The "primary" event is the most-decoded one — Receive
+ * carries the full TeleporterMessage + appMessage payload, so it
+ * wins when present.
+ */
+interface ICMGroup {
+  key: string; // unique row key (messageId, or tx-logIndex for events without one)
+  primary: ICMMessage; // the event we render fields off of
+  events: ICMMessage[]; // every event in this group, newest-first
+  // Lifecycle hint synthesized from which events were observed in the
+  // group. Drives the status chip.
+  lifecycle: "sent" | "delivered" | "executed" | "failed" | "settled";
+}
+
+/**
+ * Collapse a flat list of recent ICM events into one row per messageId.
+ * Events without a messageId (e.g. RelayerRewardsRedeemed,
+ * BlockchainIDInitialized) stay as their own row — they're standalone
+ * lifecycle events that don't aggregate.
+ */
+function groupICM(events: ICMMessage[]): ICMGroup[] {
+  // Per-messageId bucket; undefined-id events bypass the bucket.
+  const byId = new Map<string, ICMGroup>();
+  const standalone: ICMGroup[] = [];
+
+  // Pick the "best" event to render fields off of. ReceiveCrossChainMessage
+  // carries the full payload (teleporterMessage + decoded appMessage); a
+  // SendCrossChainMessage on the source side carries a similar payload
+  // for outbound messages. Settlement-only events (MessageExecuted,
+  // ReceiptReceived) have just the messageId in topics, so they're
+  // poor "primary" candidates — fall back only when nothing better is
+  // present.
+  const rank = (e: ICMMessage): number => {
+    switch (e.event) {
+      case "ReceiveCrossChainMessage":
+        return 5;
+      case "SendCrossChainMessage":
+        return 4;
+      case "SendWarpMessage":
+        return 3;
+      case "MessageExecutionFailed":
+        return 2;
+      case "MessageExecuted":
+        return 1;
+      case "ReceiptReceived":
+      case "AddFeeAmount":
+        return 0;
+      default:
+        return -1;
+    }
+  };
+
+  const lifecycle = (events: ICMMessage[]): ICMGroup["lifecycle"] => {
+    let s: ICMGroup["lifecycle"] = "sent";
+    for (const e of events) {
+      switch (e.event) {
+        case "ReceiptReceived":
+          return "settled";
+        case "MessageExecutionFailed":
+          s = "failed";
+          break;
+        case "MessageExecuted":
+          if (s !== "failed") s = "executed";
+          break;
+        case "ReceiveCrossChainMessage":
+          if (s === "sent") s = "delivered";
+          break;
+      }
+    }
+    return s;
+  };
+
+  for (const e of events) {
+    if (!e.messageId) {
+      standalone.push({
+        key: `${e.transactionHash}-${e.logIndex}`,
+        primary: e,
+        events: [e],
+        lifecycle: "sent",
+      });
+      continue;
+    }
+    const id = e.messageId.toLowerCase();
+    const existing = byId.get(id);
+    if (!existing) {
+      byId.set(id, { key: id, primary: e, events: [e], lifecycle: "sent" });
+      continue;
+    }
+    existing.events.push(e);
+    if (rank(e) > rank(existing.primary)) existing.primary = e;
+  }
+  // Walk groups once at the end to settle the lifecycle. Doing this
+  // per-insert above would re-scan the events list O(n²) for nothing.
+  for (const g of byId.values()) g.lifecycle = lifecycle(g.events);
+
+  // Newest-first by primary event's block timestamp. The Map keeps
+  // insertion order which already reflects newest-first from the
+  // bootstrap call, but the primary may have been swapped in mid-walk —
+  // resort defensively so a Receive event that promoted later in the
+  // walk doesn't accidentally bubble to the bottom.
+  const out = [...byId.values(), ...standalone];
+  out.sort((a, b) => {
+    const at = Date.parse(a.primary.block.timestamp);
+    const bt = Date.parse(b.primary.block.timestamp);
+    if (Number.isFinite(at) && Number.isFinite(bt) && at !== bt) return bt - at;
+    if (a.primary.block.number !== b.primary.block.number) {
+      return b.primary.block.number - a.primary.block.number;
+    }
+    return b.primary.logIndex - a.primary.logIndex;
+  });
+  return out;
+}
+
+/**
+ * Find the AppMessage attached to any event in the group. Receive and
+ * Send events both populate it (decoded by firn before the wire);
+ * settlement-only events (MessageExecuted, ReceiptReceived) don't.
+ * Returns the first hit so callers can render the protocol/kindLabel
+ * preview without re-walking the events.
+ */
+function appMessageFor(g: ICMGroup): ICMMessage["appMessage"] | undefined {
+  for (const e of g.events) if (e.appMessage) return e.appMessage;
+  return undefined;
+}
+
 function ICMRow({
-  m,
+  group: g,
   fresh,
   localChainId,
+  tokensByAddress,
   isLast,
 }: {
-  m: ICMMessage;
+  group: ICMGroup;
   fresh: boolean;
   localChainId: string | undefined;
+  tokensByAddress: Map<string, { symbol?: string; name?: string; decimals: number }>;
   isLast: boolean;
 }) {
+  const m = g.primary;
   const sourceLocal =
     m.sourceBlockchainId && localChainId
       ? m.sourceBlockchainId.toLowerCase() === localChainId.toLowerCase()
@@ -654,13 +811,53 @@ function ICMRow({
   // The detail page itself links to the transaction, so this isn't a
   // navigation dead-end — it's just a richer first-stop.
   const rowHref = m.messageId ? `/icm/${m.messageId}` : `/transactions/${m.transactionHash}`;
+  const app = appMessageFor(g);
+  // The center "preview" cell is the most informative thing in the
+  // row — when we recognized the payload as ICTT we render the token
+  // movement inline ("0.3 HERESY → 0x3c7a…"); otherwise we fall back
+  // to the event-name pill that was always there.
+  const isICTT = app?.protocol === "ICTT" && !!app.kindLabel;
+  // Resolve the destination-side ICTT contract for token lookup. On a
+  // ReceiveCrossChainMessage, teleporterMessage.destinationAddress is
+  // the TokenRemote that minted/released funds for this transfer —
+  // and on most ICTT deploys that contract IS the ERC-20 itself, so
+  // looking it up in the token catalog gives us the symbol + decimals
+  // we need for human formatting. Falls through to undefined when
+  // we're not on a Receive-shaped event (the home lane is mostly
+  // these so coverage is high in practice).
+  const ictttokenAddr = (() => {
+    for (const e of g.events) {
+      if (e.event === "ReceiveCrossChainMessage" && e.teleporterMessage?.destinationAddress) {
+        return e.teleporterMessage.destinationAddress.toLowerCase();
+      }
+    }
+    return undefined;
+  })();
+  const icttToken = ictttokenAddr ? tokensByAddress.get(ictttokenAddr) : undefined;
+  // Status badge collapses the per-event lifecycle into one chip so the
+  // user doesn't have to interpret 4 different event names. "Settled"
+  // = a ReceiptReceived round-tripped back to the source; "Executed" =
+  // delivered + invoked target; "Delivered" = Receive seen but no
+  // Executed yet; "Failed" = the on-chain call reverted; "Sent" = only
+  // a Send (no destination state observed yet on this side).
+  const statusTone = g.lifecycle === "failed" ? "bad" : g.lifecycle === "sent" ? "default" : "good";
+  const statusLabel =
+    g.lifecycle === "settled"
+      ? "Settled"
+      : g.lifecycle === "executed"
+        ? "Executed"
+        : g.lifecycle === "delivered"
+          ? "Delivered"
+          : g.lifecycle === "failed"
+            ? "Failed"
+            : "Sent";
   return (
     <Link
       href={rowHref}
       className={fresh ? "fresh-row" : undefined}
       style={{
         display: "grid",
-        gridTemplateColumns: "100px 1fr 200px 1fr 120px 70px",
+        gridTemplateColumns: "100px 1fr 220px 1fr 110px 100px 70px",
         alignItems: "center",
         gap: 16,
         padding: "14px 22px",
@@ -695,20 +892,7 @@ function ICMRow({
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "center" }}>
         <div style={{ flex: 1, height: 1, background: "var(--line)" }} />
-        <span
-          style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: 10,
-            color: "var(--ink-3)",
-            background: "var(--bg-sunken)",
-            border: "1px solid var(--line)",
-            padding: "2px 8px",
-            borderRadius: 99,
-            whiteSpace: "nowrap",
-          }}
-        >
-          {m.event}
-        </span>
+        {isICTT ? <ICTTPreview app={app!} token={icttToken} /> : <EventPill name={m.event} />}
         <div style={{ flex: 1, height: 1, background: "var(--line)" }} />
         <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden>
           <path
@@ -739,6 +923,9 @@ function ICMRow({
           dest
         </div>
       </div>
+      <div style={{ textAlign: "center", overflow: "hidden" }}>
+        <Chip tone={statusTone}>{statusLabel}</Chip>
+      </div>
       <div
         className="mono"
         style={{
@@ -757,6 +944,144 @@ function ICMRow({
       </div>
     </Link>
   );
+}
+
+/**
+ * Centerpiece preview for an ICTT-recognized message. Format precedence,
+ * top to bottom, in order of "actually informative":
+ *
+ *   1. We have decimals  → "0.3 HERESY → 0x3c7a…fec"
+ *   2. We have a symbol  → "HERESY → 0x3c7a…fec"  (decimals unknown so
+ *                          we deliberately omit the amount; rendering
+ *                          a raw uint256 or scientific notation is
+ *                          misleading without scale context)
+ *   3. Catalog miss      → "ICTT SINGLE_HOP_SEND → 0x3c7a…fec"
+ *
+ * Token info comes from the home page's bulk useTokens() catalog so a
+ * lane of 8 rows is one request, not eight per refresh.
+ */
+function ICTTPreview({
+  app,
+  token,
+}: {
+  app: NonNullable<ICMMessage["appMessage"]>;
+  token: { symbol?: string; name?: string; decimals: number } | undefined;
+}) {
+  const fields = app.fields ?? [];
+  const amountRaw = fields.find((f) => f.name === "amount")?.value;
+  const recipient = fields.find((f) => f.name === "recipient")?.value;
+  const recipientShort = recipient ? truncateHash(recipient, 4, 4) : null;
+  const isTransferShape = app.kindLabel === "SINGLE_HOP_SEND" || app.kindLabel === "MULTI_HOP_SEND";
+  const haveDecimals = isTransferShape && token?.decimals != null && amountRaw;
+  const haveSymbol = isTransferShape && token?.symbol;
+  // "Loud" body = decimals-formatted amount + symbol; "muted" body =
+  // anything we couldn't fully ground. Driving styling off this lets
+  // the catalog-hit rows pop visually so the user can scan the lane
+  // for material transfers without reading every line.
+  const body = haveDecimals
+    ? `${formatTokenAmountForRow(amountRaw!, token!.decimals)} ${token!.symbol}${recipientShort ? ` → ${recipientShort}` : ""}`
+    : haveSymbol
+      ? `${token!.symbol}${recipientShort ? ` → ${recipientShort}` : ""}`
+      : isTransferShape
+        ? recipientShort
+          ? `${app.kindLabel} → ${recipientShort}`
+          : app.kindLabel
+        : app.kindLabel;
+  const titleParts = [
+    `${app.protocol} ${app.kindLabel}`,
+    amountRaw && token?.decimals != null ? `${amountRaw} raw / ${token.decimals} decimals` : null,
+    recipient ? `recipient ${recipient}` : null,
+  ].filter(Boolean);
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 6,
+        background: "color-mix(in oklch, var(--accent) 14%, var(--bg-sunken))",
+        border: "1px solid color-mix(in oklch, var(--accent) 32%, var(--line))",
+        padding: "3px 9px",
+        borderRadius: 99,
+        whiteSpace: "nowrap",
+        maxWidth: 220,
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+      }}
+      title={titleParts.join(" · ")}
+    >
+      <span
+        className="mono"
+        style={{ fontSize: 10, fontWeight: 600, color: "var(--accent)", letterSpacing: 0.4 }}
+      >
+        ICTT
+      </span>
+      <span
+        className="mono"
+        style={{
+          fontSize: 10.5,
+          color: haveDecimals ? "var(--ink)" : "var(--ink-3)",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+        }}
+      >
+        {body}
+      </span>
+    </span>
+  );
+}
+
+function EventPill({ name }: { name: string }) {
+  return (
+    <span
+      style={{
+        fontFamily: "var(--font-mono)",
+        fontSize: 10,
+        color: "var(--ink-3)",
+        background: "var(--bg-sunken)",
+        border: "1px solid var(--line)",
+        padding: "2px 8px",
+        borderRadius: 99,
+        whiteSpace: "nowrap",
+      }}
+    >
+      {name}
+    </span>
+  );
+}
+
+/**
+ * Format a uint256 decimal-string for inline row display, applying the
+ * token's decimals and capping precision at 4 fractional digits so the
+ * lane row stays compact. Returns the trimmed integer when the amount
+ * is a whole token count. Caller MUST already know decimals — this
+ * never invents an exponent or otherwise makes up scale.
+ *
+ * Used only by ICTTPreview when the token catalog gave us decimals;
+ * for catalog misses we omit the amount entirely.
+ */
+function formatTokenAmountForRow(rawDecimal: string, decimals: number): string {
+  if (!/^\d+$/.test(rawDecimal)) return rawDecimal;
+  let n: bigint;
+  try {
+    n = BigInt(rawDecimal);
+  } catch {
+    return rawDecimal;
+  }
+  if (decimals === 0) return formatIntegerWithCommas(n.toString());
+  const base = BigInt(10) ** BigInt(decimals);
+  const whole = n / base;
+  const frac = n % base;
+  const wholeStr = formatIntegerWithCommas(whole.toString());
+  if (frac === BigInt(0)) return wholeStr;
+  // Pad fractional, strip trailing zeros, cap to 4 sig digits to keep
+  // the row tight. Header on the detail page renders the full 6+ digit
+  // version when precision matters.
+  const fracStr = frac.toString().padStart(decimals, "0").replace(/0+$/, "").slice(0, 4);
+  return fracStr ? `${wholeStr}.${fracStr}` : wholeStr;
+}
+
+function formatIntegerWithCommas(s: string): string {
+  return s.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
 
 function briefBlockchainId(id: string | undefined): string {
