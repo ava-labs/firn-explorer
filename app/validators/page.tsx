@@ -77,9 +77,12 @@ function formatUptime(uptime: string | number | undefined): string {
   return `${pct.toFixed(2)}%`;
 }
 
-/** Pick the most useful uptime field from a subnet-evm /validators entry. */
+/** Pick the most useful uptime field from a subnet-evm /validators
+ *  entry. Prefer the percentage (already normalized 0..100) over the
+ *  raw seconds count — the latter has no meaning without dividing by
+ *  the validation period, which we don't carry on this row. */
 function pickUptime(entry: L1UptimeEntry): string | number | undefined {
-  return entry.uptimePercent ?? entry.uptime;
+  return entry.uptimePercentage ?? entry.uptimeSeconds;
 }
 
 // P-Chain returns timestamps as decimal-string unix seconds.
