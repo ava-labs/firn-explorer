@@ -1,5 +1,5 @@
 // Tenant directory: maps a `<slug>.firn.gg` subdomain to the firn
-// backend for that managed L1. Fetched at request time by middleware.ts
+// backend for that managed L1. Fetched at request time by proxy.ts
 // from the managed-testnet-nodes platform's `/explorer/tenants` endpoint
 // and cached for ~30s in Edge-runtime module memory.
 //

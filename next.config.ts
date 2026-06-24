@@ -1,55 +1,50 @@
 import type { NextConfig } from "next";
 
-// Box hosting the firn instances. Pinned to a stable Elastic IP — only
-// changes if the EIP is detached. Override via FIRN_BOX_HOST in the
-// deployment environment when moving boxes.
+// Rewrite targets for same-origin `/api/firn/*` paths.
 //
-// Why we proxy via rewrites instead of pointing the frontend straight
-// at the box:
-//   1. Vercel hosts at https://; browsers block fetch from https→http
-//      (mixed-content). Rewrites are server-side proxies, so the
-//      browser only sees same-origin https; Vercel's edge does the
-//      hop.
-//   2. Same setup also works locally with `pnpm dev` (Next dev server
-//      applies the same rewrites), so dev and prod behave identically.
-//   3. SSE / long-lived streams work — rewrites are network-layer
-//      proxies, not serverless function invocations, so no timeout.
+// Default (no FIRN_BOX_HOST): local network proxies to a firn instance on
+// :4000 — `firn serve -store=mem`, compose, or `firn up`. Testnet/mainnet
+// rewrites are omitted unless the legacy remote box is opted in.
 //
-// Why all three rewrites target HTTPS sslip.io hostnames (not raw
-// IP+port): Vercel's edge can't reach plain HTTP on non-standard ports
-// — the connection hangs and returns the request as 504/timeout.
-// Caddy on the box terminates TLS for all three subdomains
-// (`local|echo|grotto.<dashed-ip>.sslip.io`) on :443 and reverse-
-// proxies to the firn process on its localhost port. From Vercel's
-// perspective everything is plain HTTPS:443.
+// Legacy remote box (DevRel): set FIRN_BOX_HOST to the box IP. sslip.io
+// hostnames terminate TLS on :443 and reverse-proxy to firn on the VM.
+// See firn docs/DEMO.md § Legacy remote demo box.
 //
-// Path naming matches the env-var contract documented in
-// lib/api/network.tsx: the public network IDs are `local`, `testnet`,
-// `mainnet`. The frontend's API base for each comes from
-// `NEXT_PUBLIC_FIRN_{LOCAL,TESTNET,MAINNET}` which on Vercel point at
-// `/api/firn/{local,testnet,mainnet}` and get rewritten here.
-const FIRN_BOX = process.env.FIRN_BOX_HOST ?? "44.195.57.61";
-const FIRN_BOX_DASH = FIRN_BOX.replace(/\./g, "-");
+// Compose / Docker builds inject FIRN_API_URL or FIRN_LOCAL_DEST instead
+// (see firn/docker/explorer-next.config.ts).
+const strip = (u: string) => u.replace(/\/$/, "");
 
-const LOCAL_HOST = process.env.FIRN_LOCAL_HOST ?? `local.${FIRN_BOX_DASH}.sslip.io`;
-const TESTNET_HOST = process.env.FIRN_TESTNET_HOST ?? `echo.${FIRN_BOX_DASH}.sslip.io`;
-const MAINNET_HOST = process.env.FIRN_MAINNET_HOST ?? `grotto.${FIRN_BOX_DASH}.sslip.io`;
+const localDest = strip(
+  process.env.FIRN_LOCAL_DEST ?? process.env.FIRN_API_URL ?? "http://127.0.0.1:4000",
+);
+
+const boxHost = process.env.FIRN_BOX_HOST?.trim();
+
+function boxRewrites() {
+  if (!boxHost) return [];
+  const dash = boxHost.replace(/\./g, "-");
+  const testnet = process.env.FIRN_TESTNET_HOST ?? `echo.${dash}.sslip.io`;
+  const mainnet = process.env.FIRN_MAINNET_HOST ?? `grotto.${dash}.sslip.io`;
+  return [
+    {
+      source: "/api/firn/testnet/:path*",
+      destination: `https://${testnet}/:path*`,
+    },
+    {
+      source: "/api/firn/mainnet/:path*",
+      destination: `https://${mainnet}/:path*`,
+    },
+  ];
+}
 
 const nextConfig: NextConfig = {
   async rewrites() {
     return [
       {
         source: "/api/firn/local/:path*",
-        destination: `https://${LOCAL_HOST}/:path*`,
+        destination: `${localDest}/:path*`,
       },
-      {
-        source: "/api/firn/testnet/:path*",
-        destination: `https://${TESTNET_HOST}/:path*`,
-      },
-      {
-        source: "/api/firn/mainnet/:path*",
-        destination: `https://${MAINNET_HOST}/:path*`,
-      },
+      ...boxRewrites(),
     ];
   },
 };

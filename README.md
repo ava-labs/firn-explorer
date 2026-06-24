@@ -24,17 +24,31 @@ The explorer's job is to be a faithful renderer of firn's API. Everything cosmet
 ```bash
 git clone https://github.com/ava-labs/firn-explorer
 cd firn-explorer
+corepack enable
 pnpm install
 cp .env.example .env.local
 pnpm dev
 # → http://localhost:3000
 ```
 
-`.env.example` ships defaults that work out of the box against the shared dev firn box. The `NEXT_PUBLIC_FIRN_*` values are same-origin paths (`/api/firn/local`, `/api/firn/fuji`) that route through Next.js rewrites in `next.config.ts` to whichever box is hosting firn. Same setup applies to `pnpm dev` and prod, so dev and prod behave identically — and the browser only ever sees same-origin https, sidestepping mixed-content blocks.
+**Local-first defaults.** With no `FIRN_BOX_HOST`, `/api/firn/local` rewrites to
+`http://127.0.0.1:4000`. Start firn beside the UI:
 
-To point the rewrites at a different box, set `FIRN_BOX_HOST` in the environment.
+```bash
+# terminal 1 — firn repo
+go run ./cmd/firn serve -store=mem -addr=127.0.0.1:4000
 
-Want to run firn yourself instead? `go run github.com/ava-labs/firn/cmd/firn` brings one up on `:4000` against a synthetic in-memory store. Either set `NEXT_PUBLIC_FIRN_LOCAL=http://localhost:4000` directly (skipping the rewrites) or update `next.config.ts` to proxy at your local port.
+# terminal 2 — this repo
+pnpm dev
+```
+
+`NEXT_PUBLIC_FIRN_*` values are same-origin paths (`/api/firn/local`,
+`/api/firn/testnet`) that route through Next.js rewrites in `next.config.ts`.
+Testnet/mainnet rewrites to the legacy remote demo box require
+`FIRN_BOX_HOST` — see [firn docs/DEMO.md](https://github.com/ava-labs/firn/blob/main/docs/DEMO.md).
+
+Or use firn's compose stack (`docker compose up` in the firn repo) which builds
+this app with compose-friendly rewrites.
 
 ## Build + deploy
 
@@ -42,7 +56,7 @@ Want to run firn yourself instead? `go run github.com/ava-labs/firn/cmd/firn` br
 pnpm build && pnpm start
 ```
 
-Standard Next.js app — Vercel, Cloudflare, self-hosted, whatever. `NEXT_PUBLIC_FIRN_*` is baked at build time, so set it (and `FIRN_BOX_HOST` if you're overriding the proxy target) on the build environment.
+Standard Next.js app — Vercel, Cloudflare, self-hosted, whatever. `NEXT_PUBLIC_FIRN_*` is baked at build time. Set `FIRN_BOX_HOST` on the build environment only when proxying testnet/mainnet to the legacy remote box.
 
 ## License
 

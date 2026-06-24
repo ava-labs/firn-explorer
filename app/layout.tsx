@@ -65,7 +65,7 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // Tenant identity for `<slug>.firn.gg` deploys is set by middleware.ts
+  // Tenant identity for `<slug>.firn.gg` deploys is set by proxy.ts
   // on the request headers; we lift it here so the SSR'd HTML is
   // already in tenant mode (no flicker on hydration).
   const h = await headers();

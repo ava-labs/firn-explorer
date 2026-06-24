@@ -17,7 +17,7 @@ const TENANT_HOST_RE = /^([1-9a-z]{8})\.firn\.gg$/i;
 
 const TENANT_API_PREFIX = "/api/firn/tenant/";
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const host = (request.headers.get("host") ?? "").split(":")[0]; // strip :port for dev
   const m = host.match(TENANT_HOST_RE);
   const slug = m ? m[1].toLowerCase() : null;

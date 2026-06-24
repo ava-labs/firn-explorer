@@ -23,7 +23,7 @@ import { setApiBase } from "./client";
  *   NEXT_PUBLIC_FIRN_MAINNET
  *
  * Tenant mode: when the request lands on a `<slug>.firn.gg` host,
- * middleware injects an `x-firn-tenant-*` header pair, the layout
+ * proxy.ts injects an `x-firn-tenant-*` header pair, the layout
  * passes it as the `tenant` prop here, and the provider replaces the
  * network list with a single locked entry pointing at
  * `/api/firn/tenant`. Apex networks aren't selectable in that mode.
@@ -54,7 +54,7 @@ const APEX_NETWORKS: ReadonlyArray<NetworkConfig> = [
   { id: "mainnet", label: "Mainnet", url: MAINNET_URL },
 ];
 
-// Path the middleware proxies to the per-tenant firn backend. Same-origin
+// Path the proxy proxies to the per-tenant firn backend. Same-origin
 // (`/api/firn/tenant`) so the browser only ever sees its own host's https.
 const TENANT_API_BASE = "/api/firn/tenant";
 
