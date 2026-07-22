@@ -28,7 +28,7 @@ import type { NextConfig } from "next";
 // `mainnet`. The frontend's API base for each comes from
 // `NEXT_PUBLIC_FIRN_{LOCAL,TESTNET,MAINNET}` which on Vercel point at
 // `/api/firn/{local,testnet,mainnet}` and get rewritten here.
-const FIRN_BOX = process.env.FIRN_BOX_HOST ?? "44.195.57.61";
+const FIRN_BOX = process.env.FIRN_BOX_HOST ?? "54.144.244.110";
 const FIRN_BOX_DASH = FIRN_BOX.replace(/\./g, "-");
 
 const LOCAL_HOST = process.env.FIRN_LOCAL_HOST ?? `local.${FIRN_BOX_DASH}.sslip.io`;
